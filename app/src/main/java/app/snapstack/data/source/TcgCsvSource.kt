@@ -168,6 +168,46 @@ class TcgCsvSource(
             }.distinctBy { it.code }
         }
 
+        /**
+         * TCGplayer sets that can hold other printings of a One Piece code (e.g. "OP04-043"): that set's own
+         * pre-release / release-event / anniversary sets ("OP04 PRE", "OP14 RE", "OP14-EB04"), plus the
+         * cross-set ones — Promotion Cards (Judge, tournament, prize…), Premium Boosters, Revision Pack,
+         * Demo Deck, Learn Together, Set Sail, Collection Sets.
+         */
+        fun onePieceVariantGroups(code: String, sets: List<CardSet>): List<CardSet> {
+            val prefix = onePiecePrefix(code)
+            val primary = onePiecePrimaryGroups(code, sets).map { it.code }.toSet()
+            val mainSet = Regex("^(OP|ST|EB)\\d{2}")
+            return sets.filter { s ->
+                if (s.code in primary) return@filter false
+                val key = s.abbreviation?.uppercase(Locale.US)?.filter { it.isLetterOrDigit() } ?: return@filter false
+                (prefix.isNotEmpty() && key.startsWith(prefix)) || !mainSet.containsMatchIn(key)
+            }
+        }
+
+        /**
+         * The set(s) a One Piece code was released in: "OP04" → OP04; "ST01" → "ST-01"; combined releases
+         * like "OP14-EB04" serve both OP14 and EB04 codes.
+         */
+        fun onePiecePrimaryGroups(code: String, sets: List<CardSet>): List<CardSet> {
+            val prefix = onePiecePrefix(code)
+            if (prefix.isEmpty()) return emptyList()
+            return sets.filter { s ->
+                val abbr = s.abbreviation?.uppercase(Locale.US) ?: return@filter false
+                val key = abbr.filter { it.isLetterOrDigit() }
+                val parts = abbr.split(Regex("[^A-Z0-9]+"))
+                key == prefix || (parts.size == 2 && parts.all { Regex("^(OP|ST|EB)\\d{2}$").matches(it) } && prefix in parts)
+            }
+        }
+
+        private fun onePiecePrefix(code: String) = code.uppercase(Locale.US).substringBefore('-').filter { it.isLetterOrDigit() }
+
+        /** "Ulti (Judge Pack Vol. 3)" → "Judge Pack Vol. 3"; the regular printing → "Regular". */
+        fun printingLabel(name: String): String =
+            Regex("[(\\[]([^)\\]]+)[)\\]]").findAll(name).map { it.groupValues[1] }
+                .filterNot { Regex("^\\d{3}$").matches(it) } // "(001)" is part of the name, not a printing
+                .joinToString(" · ").ifEmpty { "Regular" }
+
         /** Words TCGplayer appends to special printings that share a card number. */
         private val special = Regex(
             "\\((?:[^)]*\\b(?:parallel|alternate|alt art|manga|sp|spr|box topper|treasure|gold|signature|signed|" +

@@ -69,7 +69,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
             """CREATE TABLE collection(
                 id INTEGER PRIMARY KEY AUTOINCREMENT, card_id TEXT NOT NULL, variant TEXT, cond TEXT NOT NULL,
                 qty INTEGER NOT NULL, cost REAL, grader TEXT, grade TEXT, notes TEXT, value_override REAL,
-                added_at INTEGER NOT NULL, price_at_add REAL, rip_id INTEGER)"""
+                added_at INTEGER NOT NULL, price_at_add REAL, rip_id INTEGER, lang TEXT)"""
         )
         db.execSQL("CREATE INDEX collection_card ON collection(card_id)")
         db.execSQL("CREATE TABLE wantlist(card_id TEXT PRIMARY KEY, added_at INTEGER NOT NULL)")
@@ -92,7 +92,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // v1 is the first schema; future migrations go here.
+        if (oldVersion < 2) db.execSQL("ALTER TABLE collection ADD COLUMN lang TEXT")
     }
 
     // ---------------------------------------------------------------- cards
@@ -549,7 +549,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
 
     companion object {
         const val NAME = "snapstack.db"
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }
 
@@ -600,6 +600,7 @@ private fun Cursor.toItem(): CollectionItem {
         addedAt = long("added_at"),
         priceAtAdd = double("price_at_add"),
         ripId = idx("rip_id").let { if (isNull(it)) null else getLong(it) },
+        language = getColumnIndex("lang").let { if (it < 0 || isNull(it)) null else getString(it) },
     )
 }
 
@@ -638,6 +639,7 @@ private fun CollectionItem.toValues(includeId: Boolean) = ContentValues().apply 
     put("card_id", cardId); put("variant", variant); put("cond", condition.code); put("qty", qty)
     put("cost", costEach); put("grader", grader); put("grade", grade); put("notes", notes)
     put("value_override", valueOverride); put("added_at", addedAt); put("price_at_add", priceAtAdd); put("rip_id", ripId)
+    put("lang", language)
 }
 
 fun Card.toJson(): JSONObject = JSONObject().apply {
@@ -670,6 +672,7 @@ private fun CollectionItem.toJson(): JSONObject = JSONObject().apply {
     put("cardId", cardId); put("variant", variant); put("condition", condition.code); put("qty", qty)
     put("costEach", costEach); put("grader", grader); put("grade", grade); put("notes", notes)
     put("valueOverride", valueOverride); put("addedAt", addedAt); put("priceAtAdd", priceAtAdd); put("ripId", ripId)
+    put("language", language)
 }
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
@@ -686,5 +689,6 @@ private fun itemFromJson(o: JSONObject): CollectionItem? {
         grader = o.optStringOrNull("grader"), grade = o.optStringOrNull("grade"), notes = o.optStringOrNull("notes"),
         valueOverride = o.optDoubleOrNull("valueOverride"), addedAt = o.optLong("addedAt", System.currentTimeMillis()),
         priceAtAdd = o.optDoubleOrNull("priceAtAdd"), ripId = if (o.isNull("ripId")) null else o.optLong("ripId"),
+        language = o.optStringOrNull("language"),
     )
 }

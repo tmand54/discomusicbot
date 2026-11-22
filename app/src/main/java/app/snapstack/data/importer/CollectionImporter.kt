@@ -11,6 +11,7 @@ import app.snapstack.model.Card
 import app.snapstack.model.CardSet
 import app.snapstack.model.CollectionItem
 import app.snapstack.model.Game
+import app.snapstack.model.Languages
 import app.snapstack.model.normalizeNumber
 import app.snapstack.scan.DragonBallKey
 import app.snapstack.scan.LorcanaKey
@@ -223,6 +224,7 @@ class CollectionImporter(
                     costEach = r.costEach, grader = r.grader, grade = r.grade, notes = r.notes,
                     valueOverride = r.gradedValue, addedAt = r.addedAt ?: now,
                     priceAtAdd = r.priceAtAdd ?: card.price(variant),
+                    language = r.language,
                 )
                 copies += r.qty
                 importedRows++
@@ -303,8 +305,14 @@ class CollectionImporter(
                 val set = bestSet(game, row.setName)
                 when {
                     row.name.trim().startsWith("DON", ignoreCase = true) -> tryKey(OnePieceDonKey(set?.code))
-                    number != null && Regex("^(OP|ST|EB|PRB)\\d{2}-\\d{3}|^P-\\d{3}").containsMatchIn(number.uppercase(Locale.US)) ->
-                        tryKey(OnePieceKey(number.uppercase(Locale.US).substringBefore(' ')))
+                    number != null && Regex("^(OP|ST|EB|PRB)\\d{2}-\\d{3}|^P-\\d{3}").containsMatchIn(number.uppercase(Locale.US)) -> {
+                        val code = number.uppercase(Locale.US).substringBefore(' ')
+                        tryKey(OnePieceKey(code))
+                        // A Japanese card from a set that isn't out in English yet: keep it as a Japanese card.
+                        if (candidates.isEmpty() && row.language == Languages.JP) {
+                            return withContext(Dispatchers.IO) { cards.japaneseOnly(code) }
+                        }
+                    }
                 }
                 set?.let { fromSetByName(it) }
             }

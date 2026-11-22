@@ -124,13 +124,14 @@ class CollectionRepository(
     suspend fun exportCsv(out: OutputStream) = io {
         val adjust = settings.conditionAdjusted.value
         out.bufferedWriter().use { w ->
-            w.appendLine("Game,Name,Set,Number,Rarity,Printing,Condition,Quantity,Grader,Grade,Purchase Price,Market Price,Total Value,Added")
+            w.appendLine("Game,Name,Set,Number,Rarity,Printing,Language,Condition,Quantity,Grader,Grade,Purchase Price,Market Price,Total Value,Added")
             for (o in db.ownedCards()) {
                 val c = o.card; val i = o.item
                 val added = Instant.ofEpochMilli(i.addedAt).atZone(ZoneId.systemDefault()).toLocalDate()
                 w.appendLine(
                     listOf(
                         c.game.label, c.title, c.setName, c.number, c.rarity ?: "", Variants.label(i.variant),
+                        app.snapstack.model.Languages.label(i.language),
                         i.condition.code, i.qty.toString(), i.grader ?: "", i.grade ?: "",
                         i.costEach?.let { "%.2f".format(it) } ?: "", "%.2f".format(o.unitValue(adjust)),
                         "%.2f".format(o.totalValue(adjust)), added.toString(),

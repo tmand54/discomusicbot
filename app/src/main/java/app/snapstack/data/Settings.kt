@@ -42,6 +42,8 @@ class Settings(context: Context) {
     val backgroundRefresh = bool("background_refresh", true)
     val wifiOnly = bool("wifi_only", false)
     val showOcrStats = bool("show_ocr_stats", true)
+    /** Language of the One Piece cards being scanned: "EN" or "JP". */
+    val onePieceLanguage = string("op_language", "EN")
 
     fun getLong(key: String): Long = prefs.getLong(key, 0L)
     fun putLong(key: String, value: Long) = prefs.edit().putLong(key, value).apply()

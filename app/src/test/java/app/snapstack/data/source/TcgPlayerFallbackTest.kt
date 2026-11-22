@@ -41,3 +41,37 @@ class TcgPlayerFallbackTest {
         assertEquals(mapOf("Ultra Rare" to 250.0), adapted)
     }
 }
+
+class OnePieceGroupsTest {
+    private fun set(code: String, abbr: String) = app.snapstack.model.CardSet(Game.ONE_PIECE, code, abbr, null, null, abbreviation = abbr)
+
+    // Real TCGplayer One Piece set abbreviations.
+    private val sets = listOf(
+        set("1", "OP04"), set("2", "OP04 PRE"), set("3", "OP-PR"), set("4", "PRB-01"), set("5", "PRB-02"),
+        set("6", "OP05"), set("7", "ST-01"), set("8", "OP14-EB04"), set("9", "OP14 RE"), set("10", "OP-RP"),
+        set("11", "LT-01"), set("12", "SD01"), set("13", "OP15-EB04"), set("14", "EB02"),
+    )
+
+    @Test fun primarySets() {
+        assertEquals(listOf("1"), TcgCsvSource.onePiecePrimaryGroups("OP04-043", sets).map { it.code })
+        assertEquals(listOf("7"), TcgCsvSource.onePiecePrimaryGroups("ST01-012", sets).map { it.code })
+        // Combined releases serve both codes.
+        assertEquals(listOf("8"), TcgCsvSource.onePiecePrimaryGroups("OP14-001", sets).map { it.code })
+        assertEquals(listOf("8", "13"), TcgCsvSource.onePiecePrimaryGroups("EB04-010", sets).map { it.code })
+    }
+
+    @Test fun variantSetsForAJudgePromo() {
+        val v = TcgCsvSource.onePieceVariantGroups("OP04-043", sets).map { it.abbreviation }.toSet()
+        // Its own pre-release set + the cross-set ones (Promotion Cards hold the Judge versions).
+        assertEquals(setOf("OP04 PRE", "OP-PR", "PRB-01", "PRB-02", "OP-RP", "LT-01", "SD01"), v)
+        val v14 = TcgCsvSource.onePieceVariantGroups("OP14-020", sets).map { it.abbreviation }.toSet()
+        assert("OP14 RE" in v14 && "OP14-EB04" !in v14 && "OP04 PRE" !in v14)
+    }
+
+    @Test fun printingLabels() {
+        assertEquals("Judge Pack Vol. 3", TcgCsvSource.printingLabel("Ulti (Judge Pack Vol. 3)"))
+        assertEquals("Parallel", TcgCsvSource.printingLabel("Roronoa Zoro (001) (Parallel)"))
+        assertEquals("Regular", TcgCsvSource.printingLabel("Ulti"))
+        assertEquals("Regular", TcgCsvSource.printingLabel("Roronoa Zoro (001)"))
+    }
+}

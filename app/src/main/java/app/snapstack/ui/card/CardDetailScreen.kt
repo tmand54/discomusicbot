@@ -2,6 +2,7 @@ package app.snapstack.ui.card
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,7 @@ import app.snapstack.ui.components.GameBadge
 import app.snapstack.ui.components.LineChart
 import app.snapstack.ui.components.SectionHeader
 import app.snapstack.ui.components.money
+import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.ui.theme.Numeric
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,9 +94,17 @@ class CardDetailViewModel(val cardId: String) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val refreshing = MutableStateFlow(false)
+    /** Other printings of this code (regular / parallel / Judge / pre-release / reprints…). */
+    val printings = MutableStateFlow<List<Card>>(emptyList())
 
     init {
         refresh(force = false)
+        viewModelScope.launch {
+            val c = card.value ?: return@launch
+            printings.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { graph.cards.printingsOf(c) }.getOrDefault(emptyList())
+            }
+        }
     }
 
     fun refresh(force: Boolean) {
@@ -117,7 +127,7 @@ class CardDetailViewModel(val cardId: String) : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CardDetailScreen(cardId: String, onBack: () -> Unit) {
+fun CardDetailScreen(cardId: String, onBack: () -> Unit, onOpenCard: (String) -> Unit = {}) {
     val vm: CardDetailViewModel = viewModel(key = cardId) { CardDetailViewModel(cardId) }
     val card by vm.card.collectAsState()
     val owned by vm.owned.collectAsState()
@@ -126,6 +136,7 @@ fun CardDetailScreen(cardId: String, onBack: () -> Unit) {
     val selVariant by vm.variant.collectAsState()
     val history by vm.history.collectAsState()
     val refreshing by vm.refreshing.collectAsState()
+    val printings by vm.printings.collectAsState()
     val context = LocalContext.current
     var editing by remember { mutableStateOf<CollectionItem?>(null) }
     var alertDialog by remember { mutableStateOf(false) }
@@ -196,6 +207,29 @@ fun CardDetailScreen(cardId: String, onBack: () -> Unit) {
                     }
                 }
             }
+            if (printings.isNotEmpty()) item {
+                SectionHeader("Variants (${printings.size + 1})")
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    (listOf(c) + printings).forEach { p ->
+                        val current = p.id == c.id
+                        Column(
+                            Modifier.width(96.dp).clip(RoundedCornerShape(8.dp))
+                                .then(if (current) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier)
+                                .clickable(enabled = !current) { onOpenCard(p.id) }
+                                .padding(if (current) 3.dp else 0.dp),
+                        ) {
+                            CardImage(p.imageSmall, Modifier.fillMaxWidth(), corner = 6.dp)
+                            Text(
+                                if (p.number == TcgCsvSource.DON_NUMBER) p.name.removePrefix("DON!! Card").trim().ifEmpty { "Plain" }
+                                else TcgCsvSource.printingLabel(p.name),
+                                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                            )
+                            Text(p.setName, style = MaterialTheme.typography.labelSmall, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(money(p.price(null)), style = MaterialTheme.typography.labelSmall.merge(Numeric), color = MaterialTheme.colorScheme.secondary)
+                        }
+                    }
+                }
+            }
             item {
                 SectionHeader("Price history")
                 if (history.size >= 2) {
@@ -241,6 +275,12 @@ fun CardDetailScreen(cardId: String, onBack: () -> Unit) {
                     }
                     OutlinedButton(onClick = { open(context, ebaySold(c)) }) { Text("eBay sold") }
                 }
+                if (c.game == app.snapstack.model.Game.ONE_PIECE && c.number != TcgCsvSource.DON_NUMBER) {
+                    OutlinedButton(
+                        onClick = { open(context, "https://yuyu-tei.jp/sell/opc/s/search?search_word=${Uri.encode(c.number)}") },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) { Text("Japanese price (Yuyu-tei)") }
+                }
             }
         }
     }
@@ -266,7 +306,11 @@ private fun OwnedRow(item: CollectionItem, card: Card, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         headlineContent = {
-            Text("${item.qty}× ${Variants.label(item.variant)} · ${item.condition.code}" + (item.grader?.let { " · $it ${item.grade.orEmpty()}" } ?: ""))
+            Text(
+                "${item.qty}× ${Variants.label(item.variant)} · ${item.condition.code}" +
+                    (if (item.language != null) " · ${app.snapstack.model.Languages.label(item.language)}" else "") +
+                    (item.grader?.let { " · $it ${item.grade.orEmpty()}" } ?: "")
+            )
         },
         supportingContent = {
             val cost = item.costEach?.let { "Paid ${money(it)} each" } ?: "No purchase price"

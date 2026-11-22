@@ -101,6 +101,15 @@ class ImportParsingTest {
         assertEquals(0.5, r.costEach!!, 0.0)
     }
 
+    @Test fun languageColumn() {
+        val p = ImportParsing.parseCsv("Name,Number,Game,Language\nUlti,OP04-043,One Piece,Japanese\nZoro,OP01-001,One Piece,English\n")
+        assertEquals("JP", p.rows[0].language)
+        assertNull(p.rows[1].language)
+        assertEquals("JP", ImportParsing.languageFrom("日本語"))
+        assertEquals("JP", ImportParsing.languageFrom("JP"))
+        assertNull(ImportParsing.languageFrom("EN"))
+    }
+
     @Test fun semicolonCsv() {
         val p = ImportParsing.parseCsv("name;set;qty\nPikachu;Base Set;3\n")
         assertEquals(3, p.rows.single().qty)

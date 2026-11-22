@@ -1,5 +1,6 @@
 package app.snapstack.ui.scan
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.snapstack.model.Condition
 import app.snapstack.model.Game
+import app.snapstack.model.Languages
 import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.model.Variants
 import app.snapstack.scan.ItemStatus
@@ -127,7 +129,10 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
             val card = item.card
             if (card != null) {
                 val isDon = card.game == Game.ONE_PIECE && card.number == TcgCsvSource.DON_NUMBER
-                var donFilter by remember(item.uid) { mutableStateOf("") }
+                // One Piece / Dragon Ball / Riftbound: every printing of this code (regular, parallel, Judge,
+                // pre-release, reprint…) is a separate card — show them all, labelled, and let the user switch.
+                val catalogGame = card.game == Game.ONE_PIECE || card.game == Game.DRAGON_BALL || card.game == Game.RIFTBOUND
+                var filter by remember(item.uid) { mutableStateOf("") }
                 if (!item.confident || item.alternatives.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -135,34 +140,65 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
                         Text(
                             when {
                                 isDon -> " Which DON!! card is it?"
+                                catalogGame && !item.confident -> " Variant — which one is it? (${item.alternatives.size + 1})"
+                                catalogGame -> "Variant (${item.alternatives.size + 1})"
                                 !item.confident -> " Not sure — is it one of these?"
                                 else -> "Other matches"
                             },
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
-                    if (isDon) OutlinedTextField(
-                        value = donFilter, onValueChange = { donFilter = it }, singleLine = true,
-                        placeholder = { Text("Filter: gold, Luffy, manga, OP05…") },
+                    if (isDon || (catalogGame && item.alternatives.size > 7)) OutlinedTextField(
+                        value = filter, onValueChange = { filter = it }, singleLine = true,
+                        placeholder = { Text(if (isDon) "Filter: gold, Luffy, manga, OP05…" else "Filter: judge, parallel, pre-release…") },
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                     )
-                    val shown = if (isDon) {
-                        item.alternatives.filter { alt ->
-                            donFilter.isBlank() || alt.name.contains(donFilter.trim(), true) || alt.setName.contains(donFilter.trim(), true)
-                        }.take(40)
-                    } else item.alternatives.take(10)
+                    val q = filter.trim()
+                    val pool = if (catalogGame) listOf(card) + item.alternatives else item.alternatives
+                    val shown = pool.filter { alt ->
+                        q.isEmpty() || alt.id == card.id || alt.name.contains(q, true) || alt.setName.contains(q, true)
+                    }.take(if (catalogGame) 40 else 10)
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         shown.forEach { alt ->
-                            Column(Modifier.width(if (isDon) 88.dp else 72.dp).clip(RoundedCornerShape(8.dp)).clickable { vm.session.chooseAlternative(item.uid, alt) }) {
+                            val selected = alt.id == card.id
+                            Column(
+                                Modifier.width(if (catalogGame) 92.dp else 72.dp).clip(RoundedCornerShape(8.dp))
+                                    .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)) else Modifier)
+                                    .clickable(enabled = !selected) { vm.session.chooseAlternative(item.uid, alt) }
+                                    .padding(if (selected) 3.dp else 0.dp),
+                            ) {
                                 CardImage(alt.imageSmall, Modifier.fillMaxWidth(), corner = 6.dp)
-                                if (isDon) Text(donLabel(alt.name), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                if (catalogGame) Text(
+                                    if (isDon) donLabel(alt.name) else TcgCsvSource.printingLabel(alt.name),
+                                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                )
                                 Text(alt.setName, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                if (isDon) Text(money(alt.price(null)), style = MaterialTheme.typography.labelSmall.merge(Numeric), color = MaterialTheme.colorScheme.secondary)
+                                if (catalogGame) Text(
+                                    money(alt.price(null)), style = MaterialTheme.typography.labelSmall.merge(Numeric),
+                                    color = MaterialTheme.colorScheme.secondary,
+                                )
                             }
                         }
                     }
-                    if (isDon && shown.isEmpty()) Text("No DON!! card matches \"$donFilter\".", style = MaterialTheme.typography.bodySmall)
+                    if (shown.size <= 1 && q.isNotEmpty()) Text("Nothing matches \"$filter\".", style = MaterialTheme.typography.bodySmall)
                     if (!item.confident) TextButton(onClick = { vm.session.markConfirmed(item.uid) }) { Text("It's correct") }
+                }
+
+                if (card.game == Game.ONE_PIECE) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("Language", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = item.language == null, onClick = { vm.session.setLanguage(item.uid, null) }, label = { Text("English") })
+                        FilterChip(
+                            selected = item.language == Languages.JP,
+                            onClick = { vm.session.setLanguage(item.uid, Languages.JP) }, label = { Text("Japanese") },
+                        )
+                    }
+                    if (item.language == Languages.JP) Text(
+                        "Valued at the English market price — there's no free Japanese price feed. Set your own value in the collection if it differs.",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
 
                 if (card.allVariants.size > 1) {

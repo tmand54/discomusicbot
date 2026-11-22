@@ -234,7 +234,7 @@ class CardRepository(
             from = ResolvedFrom.NETWORK
             ensureSetList(Game.ONE_PIECE)
             val sets = db.getSets(Game.ONE_PIECE)
-            val primary = sets.filter { abbrevKey(it.abbreviation) == prefix }
+            val primary = TcgCsvSource.onePiecePrimaryGroups(code, sets)
             val candidates = primary.ifEmpty {
                 if (prefix == "P") sets.filter { it.name.contains("Promo", true) }.take(6) else emptyList()
             }
@@ -265,6 +265,44 @@ class CardRepository(
         }
         if (matches.isEmpty()) return Resolution(null)
         return rankPrintings(matches, preferred, from)
+    }
+
+    /**
+     * Every other printing of a One Piece card's code: Judge / tournament / prize promos, pre-release and
+     * release-event stamps, Premium Booster reprints… Those live in other TCGplayer sets, which are
+     * downloaded once (a few MB) the first time; after that this is an instant lookup.
+     */
+    suspend fun otherPrintings(card: Card): List<Card> {
+        if (card.game != Game.ONE_PIECE || card.number == TcgCsvSource.DON_NUMBER || card.id.startsWith("opjp:")) return emptyList()
+        runCatching { ensureSetList(Game.ONE_PIECE) }
+        val groups = TcgCsvSource.onePieceVariantGroups(card.number, db.getSets(Game.ONE_PIECE))
+        if (groups.any { it.cachedAt == 0L }) downloadSets(groups)
+        return db.findByNumber(Game.ONE_PIECE, card.number).filter { it.id != card.id }
+            .sortedWith(compareBy<Card>({ TcgCsvSource.specialness(it.name) }, { it.price(null) ?: Double.MAX_VALUE }))
+    }
+
+    /** Other printings of the same card code (One Piece, Dragon Ball, Riftbound), for the card page. */
+    suspend fun printingsOf(card: Card): List<Card> = when (card.game) {
+        Game.ONE_PIECE -> otherPrintings(card)
+        Game.DRAGON_BALL, Game.RIFTBOUND -> db.findByNumber(card.game, card.number).filter { it.id != card.id }
+        else -> emptyList()
+    }
+
+    /**
+     * A Japanese One Piece card that isn't in the English catalog yet (Japan gets sets months earlier).
+     * Kept as a placeholder with the official Japanese card image; there's no free Japanese price feed.
+     */
+    fun japaneseOnly(code: String): Card {
+        val c = code.uppercase(Locale.US)
+        val card = Card(
+            id = "opjp:$c", game = Game.ONE_PIECE, name = "$c (Japanese)", setCode = "JP",
+            setName = "Japanese release", number = c, rarity = null,
+            imageSmall = "https://www.onepiece-cardgame.com/images/cardlist/card/$c.png",
+            imageLarge = "https://www.onepiece-cardgame.com/images/cardlist/card/$c.png",
+            url = "https://yuyu-tei.jp/sell/opc/s/search?search_word=$c",
+        )
+        if (db.getCard(card.id) == null) db.upsertCards(listOf(card))
+        return db.getCard(card.id) ?: card
     }
 
     /** "OGN • 179/298": set code (when readable) → TCGplayer group; the number/total picks the card. */

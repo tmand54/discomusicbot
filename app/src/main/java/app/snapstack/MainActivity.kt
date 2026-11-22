@@ -153,7 +153,7 @@ private fun AppRoot(pendingCard: String?, onPendingHandled: () -> Unit) {
                     arguments = listOf(navArgument("id") { type = NavType.StringType }),
                 ) { entry ->
                     val id = Uri.decode(entry.arguments?.getString("id").orEmpty())
-                    CardDetailScreen(cardId = id, onBack = { nav.popBackStack() })
+                    CardDetailScreen(cardId = id, onBack = { nav.popBackStack() }, onOpenCard = { nav.navigate(Routes.card(it)) })
                 }
                 composable(
                     "set/{game}/{code}",

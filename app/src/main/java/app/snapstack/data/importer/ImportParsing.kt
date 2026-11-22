@@ -30,6 +30,8 @@ data class ImportRow(
     val notes: String? = null,
     /** For pasted lists: the card number/name already parsed into a lookup key. */
     val key: app.snapstack.scan.ScanKey? = null,
+    /** "JP" for Japanese copies. */
+    val language: String? = null,
 )
 
 enum class ImportFormat(val label: String) {
@@ -207,6 +209,7 @@ object ImportParsing {
         "grader" to listOf("grading company", "grader", "grading_company"),
         "grade" to listOf("grade", "grade received", "grade_received"),
         "added" to listOf("added", "date added", "created at", "created_at", "acquired", "date"),
+        "language" to listOf("language", "lang", "card language"),
     )
 
     fun parseCsv(text: String): ParsedImport {
@@ -223,7 +226,7 @@ object ImportParsing {
         if (cName < 0) throw ImportException("That CSV has no card name column (looked for: Card Name, Name, Product Name).")
         val cSet = col("set"); val cNum = col("number"); val cGame = col("game"); val cQty = col("qty")
         val cCond = col("condition"); val cPrint = col("printing"); val cCost = col("cost")
-        val cGrader = col("grader"); val cGrade = col("grade"); val cAdded = col("added")
+        val cGrader = col("grader"); val cGrade = col("grade"); val cAdded = col("added"); val cLang = col("language")
 
         val rows = ArrayList<ImportRow>()
         for (r in table.drop(1)) {
@@ -245,6 +248,7 @@ object ImportParsing {
                 grader = cell(cGrader)?.uppercase(Locale.US)?.takeUnless { it == "NONE" || it == "RAW" },
                 grade = cell(cGrade),
                 addedAt = cell(cAdded)?.let { parseDate(it) },
+                language = cell(cLang)?.let { languageFrom(it) },
             )
         }
         return ParsedImport(ImportFormat.CSV, rows)
@@ -310,6 +314,12 @@ object ImportParsing {
 
     /** True for labels like "Pokémon Japan" that the app doesn't price. */
     fun unsupportedGame(label: String?): Boolean = label != null && gameFrom(label) == null
+
+    /** "Japanese" / "JP" / "JA" / "日本語" → "JP"; English or blank → null. */
+    fun languageFrom(s: String?): String? {
+        val l = s?.trim()?.lowercase(Locale.US) ?: return null
+        return if (l.startsWith("jap") || l == "jp" || l == "ja" || l == "jpn" || s.contains("日本")) app.snapstack.model.Languages.JP else null
+    }
 
     fun conditionFrom(s: String?): Condition {
         val c = s?.lowercase(Locale.US)?.replace('_', ' ')?.trim() ?: return Condition.NM

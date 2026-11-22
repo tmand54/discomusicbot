@@ -99,7 +99,14 @@ data class CollectionItem(
     val addedAt: Long = System.currentTimeMillis(),
     val priceAtAdd: Double? = null,
     val ripId: Long? = null,
+    /** Card language when it isn't English ("JP"). Same card code and art; valued from the English price. */
+    val language: String? = null,
 )
+
+object Languages {
+    const val JP = "JP"
+    fun label(code: String?) = when (code) { JP -> "Japanese"; null -> "English"; else -> code }
+}
 
 data class OwnedCard(val item: CollectionItem, val card: Card) {
     fun unitValue(conditionAdjusted: Boolean): Double {

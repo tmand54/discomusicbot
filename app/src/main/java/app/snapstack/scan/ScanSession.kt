@@ -1,11 +1,13 @@
 package app.snapstack.scan
 
 import app.snapstack.data.CardRepository
+import app.snapstack.data.Resolution
 import app.snapstack.data.ResolvedFrom
 import app.snapstack.model.Card
 import app.snapstack.model.CollectionItem
 import app.snapstack.model.Condition
 import app.snapstack.model.Game
+import app.snapstack.model.Languages
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +37,8 @@ data class SessionItem(
     val artScore: Float? = null,
     /** The printing was chosen by artwork among cards that share its number. */
     val artPicked: Boolean = false,
+    /** "JP" for a Japanese copy (One Piece). */
+    val language: String? = null,
 ) {
     val unitPrice: Double? get() = card?.price(variant)
     val total: Double get() = (unitPrice ?: 0.0) * qty
@@ -67,20 +71,28 @@ class ScanSession(
         private set
 
     /** [hints]: the text OCR saw on the card, used to catch misreads (see [CardRepository.resolve]). */
-    fun add(key: ScanKey, hints: List<String> = emptyList(), thumb: CardThumb? = null): Long {
+    fun add(key: ScanKey, hints: List<String> = emptyList(), thumb: CardThumb? = null, language: String? = null): Long {
         val uid = ids.getAndIncrement()
         val now = System.currentTimeMillis()
         if (_items.value.isEmpty()) startedAt = now
-        _items.update { listOf(SessionItem(uid, key, ItemStatus.RESOLVING, now)) + it }
+        _items.update { listOf(SessionItem(uid, key, ItemStatus.RESOLVING, now, language = language)) + it }
         scope.launch {
-            val r = repo.resolve(key, hints)
+            val japanese = language == Languages.JP
+            // Japanese cards don't print the English name, so don't use the OCR text to second-guess them.
+            val r = repo.resolve(key, if (japanese) emptyList() else hints).let { res ->
+                // Japan gets sets months before the English release: keep the code as a Japanese card.
+                if (res.card == null && japanese && key is OnePieceKey) {
+                    Resolution(repo.japaneseOnly(key.code), from = ResolvedFrom.DEVICE)
+                } else res
+            }
             val card = r.card
             if (card == null) {
                 update(uid) { copy(status = if (r.error != null) ItemStatus.ERROR else ItemStatus.NOT_FOUND, error = r.error) }
                 return@launch
             }
             // Flag for review when a good read of the card doesn't show this card's name anywhere.
-            val nameOk = !(key !is OnePieceDonKey && hints.size >= 3 && TextMatch.cardNameScore(card.name, hints) < 0.35)
+            val nameOk = japanese ||
+                !(key !is OnePieceDonKey && hints.size >= 3 && TextMatch.cardNameScore(card.name, hints) < 0.35)
             update(uid) {
                 copy(
                     status = ItemStatus.READY, card = card, alternatives = r.alternatives,
@@ -88,9 +100,26 @@ class ScanSession(
                     variant = pickVariant(card), from = r.from, resolveMs = System.currentTimeMillis() - scannedAt,
                 )
             }
+            // One Piece: promo / Judge / pre-release / reprint printings of this code live in other sets.
+            var alternatives = r.alternatives
+            var fallback = r.confident
+            if (card.game == Game.ONE_PIECE && key !is OnePieceDonKey) {
+                val extra = runCatching { repo.otherPrintings(card) }.getOrDefault(emptyList())
+                    .filter { e -> alternatives.none { it.id == e.id } }
+                if (extra.isNotEmpty()) {
+                    alternatives = alternatives + extra
+                    val base = card.price(null) ?: 0.0
+                    // A much pricier printing could be the one in hand: ask, unless the artwork settles it.
+                    fallback = fallback && extra.none { (it.price(null) ?: 0.0) > base * 2 + 1.0 }
+                    update(uid) {
+                        if (this.card?.id != card.id) this
+                        else copy(alternatives = alternatives, confident = fallback && nameOk)
+                    }
+                }
+            }
             // Several printings share this number (parallel, alt art, promo, DON!!): let the artwork decide.
-            if (thumb != null && r.alternatives.isNotEmpty()) {
-                matchArt(uid, card, r.alternatives, thumb, don = key is OnePieceDonKey, nameOk = nameOk, fallback = r.confident)
+            if (thumb != null && alternatives.isNotEmpty()) {
+                matchArt(uid, card, alternatives, thumb, don = key is OnePieceDonKey, nameOk = nameOk, fallback = fallback)
             }
             // Each DON!! card is picked by hand, so don't fold several DON!! scans into one row.
             if (key !is OnePieceDonKey && mergeDuplicate(uid)) return@launch
@@ -164,6 +193,8 @@ class ScanSession(
 
     fun setCondition(uid: Long, condition: Condition) = update(uid) { copy(condition = condition) }
 
+    fun setLanguage(uid: Long, language: String?) = update(uid) { copy(language = language) }
+
     fun setVariant(uid: Long, variant: String) {
         val item = _items.value.firstOrNull { it.uid == uid } ?: return
         update(uid) { copy(variant = variant, variantChosen = true) }
@@ -198,7 +229,7 @@ class ScanSession(
     fun toCollectionItems(): List<CollectionItem> = readyItems().reversed().map { s ->
         CollectionItem(
             cardId = s.card!!.id, variant = s.variant, condition = s.condition, qty = s.qty,
-            priceAtAdd = s.unitPrice, addedAt = System.currentTimeMillis(),
+            priceAtAdd = s.unitPrice, addedAt = System.currentTimeMillis(), language = s.language,
         )
     }
 
@@ -215,7 +246,7 @@ class ScanSession(
             val card = me.card ?: return@update list
             val twin = list.firstOrNull {
                 it.uid != uid && it.status == ItemStatus.READY && it.card?.id == card.id && it.variant == me.variant &&
-                    it.condition == me.condition
+                    it.condition == me.condition && it.language == me.language
             } ?: return@update list
             merged = true
             aliases[uid] = twin.uid

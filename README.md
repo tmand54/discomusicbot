@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.6.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.6.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.7.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.7.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 The app used to be called SnapStack. Its internal app id (`app.snapstack`) hasn't changed, so
@@ -96,6 +96,16 @@ found ("Found in 12 ms · on device").
 * **Import from list or CSV:** paste a card list, or choose a CSV or another collection app's
   backup file. Find it in Settings, on the empty Portfolio, or under Search → Import list or CSV.
   See below.
+* **One Piece variants:** every printing of a code is offered when you scan it, labelled with its
+  printing (for example, Ulti OP04-043: Regular or Judge Pack Vol. 3). This includes parallels,
+  Judge / tournament / prize promos, pre-release and release-event stamps, and Premium Booster
+  reprints. Promo and reprint sets download once in the background (a few MB). Card pages show the
+  same variants.
+* **Japanese One Piece:** set the scanner to *Japanese* (or mark a copy Japanese). Japanese cards
+  share codes and art with English, so they use the English catalog. Japanese-only cards from sets
+  not yet released in English are kept with the official Japanese image. There's no free Japanese
+  price feed, so Japanese copies are valued at the English price; set your own value on a copy, or
+  check the Yuyu-tei link on the card page.
 * **One Piece DON!! cards:** the scanner recognises the DON!! logo. You then pick which DON!! card
   it is from a filterable list, with cards from the set you're opening shown first.
 

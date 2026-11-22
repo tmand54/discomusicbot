@@ -72,6 +72,7 @@ fun ItemEditorSheet(
     var grade by remember { mutableStateOf(initial.grade.orEmpty()) }
     var custom by remember { mutableStateOf(initial.valueOverride.text()) }
     var notes by remember { mutableStateOf(initial.notes.orEmpty()) }
+    var language by remember { mutableStateOf(initial.language) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
@@ -87,6 +88,16 @@ fun ItemEditorSheet(
                     card.allVariants.forEach { v ->
                         FilterChip(selected = variant == v, onClick = { variant = v }, label = { Text("${Variants.label(v)} ${money(card.prices[v])}") })
                     }
+                }
+            }
+            if (card.game == app.snapstack.model.Game.ONE_PIECE) {
+                Text("Language", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = language == null, onClick = { language = null }, label = { Text("English") })
+                    FilterChip(
+                        selected = language == app.snapstack.model.Languages.JP,
+                        onClick = { language = app.snapstack.model.Languages.JP }, label = { Text("Japanese") },
+                    )
                 }
             }
             Text("Condition", style = MaterialTheme.typography.labelLarge)
@@ -138,6 +149,7 @@ fun ItemEditorSheet(
                                 grader = grader, grade = grade.trim().takeIf { grader != null && it.isNotEmpty() },
                                 valueOverride = custom.money(), notes = notes.trim().ifEmpty { null },
                                 priceAtAdd = initial.priceAtAdd ?: card.price(variant),
+                                language = language,
                             )
                         )
                     },

@@ -18,6 +18,7 @@ import app.snapstack.AppGraph
 import app.snapstack.data.ScanMode
 import app.snapstack.data.ScanSpeed
 import app.snapstack.model.Game
+import app.snapstack.model.Languages
 import app.snapstack.model.RipSession
 import app.snapstack.model.Card
 import app.snapstack.scan.Box
@@ -63,6 +64,8 @@ data class ScanUi(
     val flash: Long = 0,
     /** The camera image is blurry (card moving or lens refocusing): those frames are skipped. */
     val blurry: Boolean = false,
+    /** Language of One Piece cards being scanned: "EN" or "JP". */
+    val onePieceLanguage: String = "EN",
 )
 
 class ScannerViewModel(app: Application) : AndroidViewModel(app) {
@@ -78,6 +81,7 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             mode = settings.mode(),
             game = Game.fromId(settings.scanGame.value),
             speed = settings.speed(),
+            onePieceLanguage = settings.onePieceLanguage.value,
         ).withGrid(settings.binderGrid.value)
     )
     val ui: StateFlow<ScanUi> = _ui.asStateFlow()
@@ -184,7 +188,13 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         var best: Detection? = null
         var verified = false
         var suspicious = false
+        val japaneseOp = state.onePieceLanguage == Languages.JP
         for (d in candidates) {
+            if (japaneseOp && d.key.game == Game.ONE_PIECE) {
+                // Japanese cards don't print the English name: nothing to cross-check, plain voting.
+                if (best == null) best = d
+                continue
+            }
             val known = peek(d.key, now)
             val match = known.isNotEmpty() && known.any { TextMatch.cardNameScore(it.name, hints) >= 0.75 }
             if (match) { best = d; verified = true; break }
@@ -217,7 +227,8 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         } else scanned
         lastCommittedId = key.id
         feedback()
-        val uid = session.add(key, hints, thumb)
+        val language = if (key.game == Game.ONE_PIECE && _ui.value.onePieceLanguage == Languages.JP) Languages.JP else null
+        val uid = session.add(key, hints, thumb, language)
         _ui.update { it.copy(flash = SystemClock.elapsedRealtime(), message = null) }
         if (_ui.value.mode == ScanMode.SINGLE) {
             analyzer.paused = true
@@ -239,6 +250,12 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         voter.reset()
         warmUp(game)
         _ui.update { it.copy(game = game, detection = null) }
+    }
+
+    fun setOnePieceLanguage(language: String) {
+        settings.onePieceLanguage.value = language
+        voter.reset()
+        _ui.update { it.copy(onePieceLanguage = language) }
     }
 
     fun setSpeed(speed: ScanSpeed) {

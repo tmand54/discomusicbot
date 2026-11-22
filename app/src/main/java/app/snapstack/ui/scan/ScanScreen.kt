@@ -140,6 +140,9 @@ fun ScanScreen(onClose: () -> Unit, onOpenCard: (String) -> Unit) {
         Column(Modifier.fillMaxWidth().statusBarsPadding()) {
             TopControls(ui, vm, onClose)
             GameChips(ui.game, vm::setGame)
+            if (ui.game == null || ui.game == Game.ONE_PIECE) {
+                OnePieceLanguageChips(ui.onePieceLanguage, vm::setOnePieceLanguage)
+            }
             val stickyVariant = ui.game?.let { sticky[it] } ?: sticky.entries.singleOrNull()?.value
             val stickyGame = ui.game ?: sticky.entries.singleOrNull()?.key
             if (stickyVariant != null && stickyGame != null) {
@@ -238,6 +241,20 @@ private fun GameChips(selected: Game?, onSelect: (Game?) -> Unit) {
         Game.entries.forEach { g ->
             FilterChip(selected = selected == g, onClick = { onSelect(g) }, label = { Text(g.label) }, colors = colors, border = null)
         }
+    }
+}
+
+/** One Piece cards print the same codes in English and Japanese: say which ones are being scanned. */
+@Composable
+private fun OnePieceLanguageChips(language: String, onSelect: (String) -> Unit) {
+    val colors = FilterChipDefaults.filterChipColors(
+        containerColor = Color.Black.copy(alpha = 0.45f), labelColor = Color.White,
+        selectedContainerColor = MaterialTheme.colorScheme.tertiary, selectedLabelColor = Color.Black,
+    )
+    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("One Piece", color = Color.White, style = MaterialTheme.typography.labelMedium)
+        FilterChip(selected = language != "JP", onClick = { onSelect("EN") }, label = { Text("English") }, colors = colors, border = null)
+        FilterChip(selected = language == "JP", onClick = { onSelect("JP") }, label = { Text("Japanese") }, colors = colors, border = null)
     }
 }
 

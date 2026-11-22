@@ -84,6 +84,22 @@ class LiveSourcesTest {
         println("onepiece ${zoro.map { it.name to it.prices }} sets=${sets.size} op01=${cards.size}")
     }
 
+    @Test fun onePieceJudgeVariant() = runBlocking {
+        val src = TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op")
+        val sets = src.fetchSets()
+        val primary = TcgCsvSource.onePiecePrimaryGroups("OP04-043", sets)
+        val variants = TcgCsvSource.onePieceVariantGroups("OP04-043", sets)
+        assertTrue(variants.any { it.name == "One Piece Promotion Cards" })
+        val promos = variants.first { it.name == "One Piece Promotion Cards" }
+        val printings = (primary + promos).flatMap { src.fetchSetCards(it).cards }.filter { it.number == "OP04-043" }
+        assertTrue("regular Ulti", printings.any { it.name == "Ulti" })
+        assertTrue("Judge Ulti", printings.any { it.name.contains("Judge") })
+        // OP14 / EB04 live in a combined set.
+        assertTrue(TcgCsvSource.onePiecePrimaryGroups("OP14-001", sets).isNotEmpty())
+        assertTrue(TcgCsvSource.onePiecePrimaryGroups("EB04-001", sets).isNotEmpty())
+        println("onepiece OP04-043 printings: ${printings.map { TcgCsvSource.printingLabel(it.name) to it.prices }}; variant sets=${variants.size}")
+    }
+
     @Test fun onePieceDonCards() = runBlocking {
         val src = TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op")
         val promos = src.fetchSets().first { it.name == "One Piece Promotion Cards" }
