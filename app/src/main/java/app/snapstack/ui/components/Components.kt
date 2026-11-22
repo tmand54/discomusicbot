@@ -65,7 +65,14 @@ fun gainColor(v: Double): Color = when {
 
 /** Card artwork with the card's real 63:88 proportions and a placeholder while loading. */
 @Composable
-fun CardImage(url: String?, modifier: Modifier = Modifier, corner: Dp = 8.dp, contentDescription: String? = null) {
+fun CardImage(
+    url: String?,
+    modifier: Modifier = Modifier,
+    corner: Dp = 8.dp,
+    contentDescription: String? = null,
+    /** Tried when [url] fails to load (e.g. a large size that the CDN doesn't have). */
+    fallbackUrl: String? = null,
+) {
     val shape = RoundedCornerShape(corner)
     Box(
         modifier
@@ -82,7 +89,17 @@ fun CardImage(url: String?, modifier: Modifier = Modifier, corner: Dp = 8.dp, co
                 contentDescription = contentDescription,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                error = { Icon(Icons.Outlined.Style, null, tint = MaterialTheme.colorScheme.outline) },
+                error = {
+                    if (fallbackUrl != null && fallbackUrl != url) {
+                        SubcomposeAsyncImage(
+                            model = fallbackUrl, contentDescription = contentDescription,
+                            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                            error = { Icon(Icons.Outlined.Style, null, tint = MaterialTheme.colorScheme.outline) },
+                        )
+                    } else {
+                        Icon(Icons.Outlined.Style, null, tint = MaterialTheme.colorScheme.outline)
+                    }
+                },
             )
         }
     }

@@ -16,13 +16,15 @@ import kotlin.math.min
  *  - Magic:    "0123 R" above "MKM • EN" (2023+), "123/280 R" above "DOM • EN" (2015-2022)
  *  - Yu-Gi-Oh: set code "LOB-EN001" under the art, 8-digit passcode bottom-left
  *  - Lorcana:  "123/204 • EN • 5" (number / total • language • set)
+ *  - One Piece: "OP01-001" / "ST01-012" / "EB01-061" / "PRB01-001", promos "P-001"
+ *  - Riftbound: "OGN • 179/298" (set • number/total), alt art "179a/298", signed cards add a star after the number
  */
 object CardTextParser {
 
     private const val LOOSE_DIGIT = "[0-9OoIl|]"
 
     private val pokemonNumber = Regex(
-        "(?<![0-9A-Za-z/])((?:[A-Z]{1,4})?$LOOSE_DIGIT{1,3}[a-z]?)\\s?[/⁄∕]\\s?((?:[A-Z]{1,4})?$LOOSE_DIGIT{2,3})(?![0-9A-Za-z])"
+        "(?<![0-9A-Za-z/])((?:[A-Z]{1,4})?$LOOSE_DIGIT{1,3}[a-z]?\\*?)\\s?[/⁄∕]\\s?((?:[A-Z]{1,4})?$LOOSE_DIGIT{2,3})(?![0-9A-Za-z])"
     )
     private val lorcanaTail = Regex("^[\\s\\W_]{0,4}(EN|DE|FR|IT|JA|ZH)[\\s\\W_]{0,4}(\\d{1,2})(?!\\d)")
     private val pokemonAbbrev = Regex("(?:^|\\s)([A-Z]{3})\\s*(?:EN)?\\s*$")
@@ -39,6 +41,19 @@ object CardTextParser {
         "(?<![A-Za-z0-9])([A-Z0-9]{2,5})\\s?-\\s?(EN|E|DE|FR|IT|SP|PT|AE|KR)?($LOOSE_DIGIT{3})(?![0-9])"
     )
     private val ygoPasscode = Regex("(?<![0-9])([0-9]{8})(?![0-9])")
+    private val onePieceCode = Regex("(?<![A-Za-z0-9])(OP|ST|EB|PRB)\\s?($LOOSE_DIGIT{2})\\s?-\\s?($LOOSE_DIGIT{3})(?![0-9])")
+    private val onePiecePromo = Regex("(?<![A-Za-z0-9])P\\s?-\\s?($LOOSE_DIGIT{3})(?![0-9])")
+    private val riftboundPrefix = Regex("([A-Z]{3})\\s*[•·.*\\-‧∙●]?\\s*$")
+    private val riftboundPublic = Regex("(?<![A-Za-z0-9])([A-Z]{3})\\s?-\\s?($LOOSE_DIGIT{3}[a-z]?\\*?)(?![0-9/])")
+
+    /** Riftbound set codes. Seeded with known sets; the app adds new ones from the downloaded set list. */
+    @Volatile
+    var riftboundCodes: Set<String> = setOf("OGN", "OGS", "SFD", "UNL", "VEN", "RAD", "LGC")
+        private set
+
+    fun registerRiftboundCodes(codes: Collection<String>) {
+        riftboundCodes = riftboundCodes + codes.map { it.uppercase(Locale.US) }.filter { it.length == 3 && it.all(Char::isLetter) }
+    }
     private val hasLetter = Regex("[A-Z]")
     private val nameLike = Regex("[A-Za-zÀ-ÿ]{3,}")
 
@@ -60,6 +75,15 @@ object CardTextParser {
         Game.LORCANA to listOf(
             "disney", "ravensburger", "storyborn", "dreamborn", "floodborn", "\\blore\\b", "\\bsing\\b",
             "\\bevasive\\b", "\\bbodyguard\\b", "\\bchallenger\\b", "\\bshift\\b", "\\bsong\\b",
+        ).map { Regex(it) },
+        Game.ONE_PIECE to listOf(
+            "don!!", "\\bdon\\s?x\\d", "\\bcounter\\b", "\\bleader\\b", "\\btrigger\\b", "\\bblocker\\b",
+            "on play", "when attacking", "activate\\s?:\\s?main", "\\bbanish\\b", "straw hat", "\\bon k\\.?o\\.?", "your turn",
+        ).map { Regex(it) },
+        Game.RIFTBOUND to listOf(
+            "\\bmight\\b", "\\bbattlefield\\b", "\\bchampion\\b", "\\blegend\\b", "\\brunes?\\b", "\\bgear\\b",
+            "\\bconquer\\b", "\\bdeathknell\\b", "\\baccelerate\\b", "\\bganking\\b", "\\blegion\\b",
+            "riot games", "league of legends", "\\bshowdown\\b", "\\brecycle\\b",
         ).map { Regex(it) },
     )
 
@@ -120,6 +144,17 @@ object CardTextParser {
                     out += Detection(LorcanaKey(tail.groupValues[2].trimStart('0').ifEmpty { "0" }, number.trimStart('0').ifEmpty { "0" }), score, line.box)
                     continue
                 }
+                // Riftbound "OGN • 179/298": a known set code (or the game is locked / clearly Riftbound).
+                val before = line.text.substring(0, m.range.first)
+                val rbCode = riftboundPrefix.find(before)?.groupValues?.get(1)
+                val knownRb = rbCode != null && (rbCode in riftboundCodes || game == Game.RIFTBOUND)
+                val rbContext = game == null && ctxOf(Game.RIFTBOUND) >= 0.34 && ctxOf(Game.RIFTBOUND) > ctxOf(Game.POKEMON)
+                if (allowed(Game.RIFTBOUND) && (knownRb || game == Game.RIFTBOUND || rbContext)) {
+                    val score = 0.68 + (if (knownRb) 0.17 else 0.0) + 0.2 * ctxOf(Game.RIFTBOUND) +
+                        if (game == Game.RIFTBOUND) 0.1 else 0.0
+                    out += Detection(RiftboundKey(if (knownRb) rbCode else null, number, totalRaw), score, line.box)
+                    if (knownRb || game == Game.RIFTBOUND) continue
+                }
                 if (!allowed(Game.POKEMON)) continue
                 val abbrev = pokemonAbbrev.find(line.text.substring(0, m.range.first))?.groupValues?.get(1)
                     ?.takeIf { it != "HP" && it != "EN" }
@@ -137,6 +172,36 @@ object CardTextParser {
                 if (!digits.all { it.isDigit() }) continue
                 val score = 0.45 + 0.35 * ctxOf(Game.POKEMON) + if (game == Game.POKEMON) 0.15 else 0.0
                 out += Detection(PokemonPromoKey(prefix, digits, nameHints), score, line.box)
+            }
+        }
+
+        // ---- One Piece: "OP01-001", promos "P-001".
+        if (allowed(Game.ONE_PIECE)) lines.forEach { line ->
+            for (m in onePieceCode.findAll(line.text)) {
+                val set = digitsLoose(m.groupValues[2]); val num = digitsLoose(m.groupValues[3])
+                if (!(set + num).all { it.isDigit() }) continue
+                val score = 0.86 + 0.15 * ctxOf(Game.ONE_PIECE) + if (game == Game.ONE_PIECE) 0.1 else 0.0
+                out += Detection(OnePieceKey("${m.groupValues[1]}$set-$num"), score, line.box)
+            }
+            for (m in onePiecePromo.findAll(line.text)) {
+                if (game != Game.ONE_PIECE && ctxOf(Game.ONE_PIECE) < 0.34) continue
+                val num = digitsLoose(m.groupValues[1])
+                if (!num.all { it.isDigit() }) continue
+                out += Detection(OnePieceKey("P-$num"), 0.6 + 0.2 * ctxOf(Game.ONE_PIECE), line.box)
+            }
+        }
+
+        // ---- Riftbound public code without total: "OGN-179".
+        if (allowed(Game.RIFTBOUND)) lines.forEach { line ->
+            for (m in riftboundPublic.findAll(line.text)) {
+                val code = m.groupValues[1]
+                if (code !in riftboundCodes && game != Game.RIFTBOUND) continue
+                val raw = m.groupValues[2]
+                val core = raw.take(3)
+                val digits = digitsLoose(core)
+                if (!digits.all { it.isDigit() }) continue
+                val num = digits + raw.drop(3)
+                out += Detection(RiftboundKey(code, num, null), 0.7 + 0.2 * ctxOf(Game.RIFTBOUND), line.box)
             }
         }
 
@@ -191,6 +256,24 @@ object CardTextParser {
         if (text.isEmpty()) return null
         val upper = text.uppercase(Locale.US)
 
+        if (game == null || game == Game.ONE_PIECE) {
+            onePieceCode.find(upper)?.let { m ->
+                return OnePieceKey("${m.groupValues[1]}${digitsLoose(m.groupValues[2])}-${digitsLoose(m.groupValues[3])}")
+            }
+            if (game == Game.ONE_PIECE) onePiecePromo.find(upper)?.let { return OnePieceKey("P-${digitsLoose(it.groupValues[1])}") }
+        }
+        if (game == null || game == Game.RIFTBOUND) {
+            Regex("^(?:([A-Z]{3})\\s*[-•·.: ]?\\s*)?(\\d{1,3}[A-Z]?\\*?)(?:\\s*/\\s*(\\d{2,3}))?$").find(upper)?.let { m ->
+                val code = m.groupValues[1].ifEmpty { null }
+                val isRb = game == Game.RIFTBOUND || (code != null && code in riftboundCodes)
+                if (isRb && (code != null || m.groupValues[3].isNotEmpty() || game == Game.RIFTBOUND)) {
+                    val raw = m.groupValues[2]
+                    val digits = raw.takeWhile { it.isDigit() }
+                    val number = digits.padStart(3, '0') + raw.drop(digits.length).lowercase(Locale.US)
+                    return RiftboundKey(code, number, m.groupValues[3].ifEmpty { null })
+                }
+            }
+        }
         if (game == null || game == Game.YUGIOH) {
             ygoCode.find(upper)?.let { m ->
                 if (m.groupValues[2].isNotEmpty() || game == Game.YUGIOH) {
@@ -248,7 +331,9 @@ object CardTextParser {
     }
 
     /** Keeps a letter prefix ("TG05"), fixes O/0 and l/1 confusions in the digits, rejects junk. */
-    private fun cleanNumber(raw: String): String? {
+    private fun cleanNumber(raw0: String): String? {
+        val star = if (raw0.endsWith('*')) "*" else ""
+        val raw = raw0.removeSuffix("*")
         val prefix = raw.takeWhile { it.isUpperCase() && it !in "OI" }
         val rest = raw.drop(prefix.length)
         val suffix = rest.takeLastWhile { it.isLowerCase() && it !in "ol" }
@@ -258,7 +343,7 @@ object CardTextParser {
         if (realDigits * 2 < core.length) return null
         val digits = digitsLoose(core)
         if (!digits.all { it.isDigit() }) return null
-        return prefix + digits + suffix
+        return prefix + digits + suffix + star
     }
 
     private fun magicNumberIn(text: String): String? {

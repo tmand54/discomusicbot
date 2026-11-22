@@ -89,6 +89,62 @@ class CardTextParserTest {
         }
     }
 
+    @Test fun onePieceCode() {
+        val key = best(frame("Roronoa Zoro", "LEADER", "[DON!! x1] [Your Turn] All of your Characters gain +1000 power.", "L OP01-001"))
+        assertEquals(OnePieceKey("OP01-001").id, key!!.id)
+    }
+
+    @Test fun onePieceStarterExtraAndPremium() {
+        assertEquals(OnePieceKey("ST01-012").id, best(frame("Monkey.D.Luffy", "Counter", "ST01-O12"))!!.id)
+        assertEquals(OnePieceKey("EB01-061").id, best(frame("Character", "EB01 - 061"))!!.id)
+        assertEquals(OnePieceKey("PRB01-001").id, best(frame("Sanji", "PRB01-001"))!!.id)
+    }
+
+    @Test fun onePieceBeatsYugiohLookalike() {
+        // "OP01-001" also fits the Yu-Gi-Oh! code shape; with One Piece words around it, One Piece wins.
+        val dets = CardTextParser.parse(frame("Leader", "DON!! x1", "Blocker", "OP01-001"))
+        assertTrue(dets.first().key is OnePieceKey)
+    }
+
+    @Test fun onePiecePromoNeedsContext() {
+        assertNull(best(frame("Something", "P-001")))
+        assertEquals(OnePieceKey("P-001").id, best(frame("Monkey.D.Luffy", "[DON!! x2] [Rush]", "Counter", "P-001"))!!.id)
+        assertEquals(OnePieceKey("P-001").id, best(frame("P-001"), Game.ONE_PIECE)!!.id)
+    }
+
+    @Test fun riftboundSetAndNumber() {
+        val key = best(frame("Ahri, Inquisitive", "Unit", "OGN • 119/298")) as RiftboundKey
+        assertEquals("OGN", key.set); assertEquals("119", key.number); assertEquals("298", key.total)
+    }
+
+    @Test fun riftboundAltArtAndSigned() {
+        val alt = best(frame("Jinx", "SFD · 201a/221")) as RiftboundKey
+        assertEquals("201a", alt.number)
+        val signed = best(frame("Viktor", "OGN 308*/298")) as RiftboundKey
+        assertEquals("308*", signed.number)
+    }
+
+    @Test fun riftboundWithoutReadableSetCode() {
+        // Number only: Riftbound when the game is locked or the card's words say Riftbound.
+        val locked = best(frame("Poro Herder", "061/298"), Game.RIFTBOUND) as RiftboundKey
+        assertEquals(null, locked.set); assertEquals("061", locked.number)
+        val byContext = best(frame("Poro Herder", "Unit", "Might 3", "Deathknell", "Legion", "061/298"))
+        assertTrue(byContext is RiftboundKey)
+        // Without either, a bare number/total stays a Pokémon read.
+        assertTrue(best(frame("Pikachu", "HP 60", "061/198")) is PokemonKey)
+    }
+
+    @Test fun riftboundPublicCode() {
+        val key = best(frame("Teemo", "OGN-263")) as RiftboundKey
+        assertEquals("OGN", key.set); assertEquals("263", key.number); assertEquals(null, key.total)
+    }
+
+    @Test fun riftboundCodesCanBeRegistered() {
+        assertTrue(best(frame("Unit", "ZZQ • 010/120")) !is RiftboundKey)
+        CardTextParser.registerRiftboundCodes(listOf("ZZQ"))
+        assertTrue(best(frame("Unit", "ZZQ • 010/120")) is RiftboundKey)
+    }
+
     @Test fun lockedGameIgnoresOtherGames() {
         val f = frame("Charizard", "HP 120", "4/102")
         assertNull(best(f, Game.MAGIC))
@@ -126,6 +182,14 @@ class CardTextParserTest {
         assertEquals("PAL", pal.abbrev); assertEquals("123", pal.number)
         val named = CardTextParser.parseTyped("Charizard ex 199/165", Game.POKEMON) as PokemonKey
         assertEquals(listOf("Charizard ex"), named.nameHints)
+        assertEquals(OnePieceKey("OP01-001").id, CardTextParser.parseTyped("op01-001", null)!!.id)
+        assertEquals(OnePieceKey("P-001").id, CardTextParser.parseTyped("P-001", Game.ONE_PIECE)!!.id)
+        val rb = CardTextParser.parseTyped("OGN 179/298", null) as RiftboundKey
+        assertEquals("OGN", rb.set); assertEquals("179", rb.number); assertEquals("298", rb.total)
+        val rb2 = CardTextParser.parseTyped("ogn-7", null) as RiftboundKey
+        assertEquals("007", rb2.number); assertEquals(null, rb2.total)
+        val rb3 = CardTextParser.parseTyped("179/298", Game.RIFTBOUND) as RiftboundKey
+        assertEquals(null, rb3.set)
         val name = CardTextParser.parseTyped("Lightning Bolt", Game.MAGIC)
         assertTrue(name is NameKey)
         assertNull(CardTextParser.parseTyped("Lightning Bolt", null))

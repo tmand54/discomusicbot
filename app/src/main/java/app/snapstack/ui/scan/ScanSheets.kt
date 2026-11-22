@@ -79,7 +79,7 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                CardImage(item.card?.imageLarge ?: item.card?.imageSmall, Modifier.width(112.dp), corner = 8.dp)
+                CardImage(item.card?.imageLarge ?: item.card?.imageSmall, Modifier.width(112.dp), corner = 8.dp, fallbackUrl = item.card?.imageSmall)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     when (item.status) {
@@ -289,7 +289,9 @@ fun TypeNumberSheet(game: Game?, onDismiss: () -> Unit, onSubmit: (String) -> Un
         Game.MAGIC -> "MKM 123  ·  or a card name"
         Game.YUGIOH -> "LOB-EN001  ·  89631139  ·  or a name"
         Game.LORCANA -> "5 123  (set, number)  ·  12/204 EN 5"
-        null -> "123/193 · MKM 123 · LOB-EN001 · 12/204 EN 5"
+        Game.ONE_PIECE -> "OP01-001  ·  ST01-012  ·  EB01-061  ·  P-001"
+        Game.RIFTBOUND -> "OGN 179/298  ·  OGN-179  ·  179/298"
+        null -> "123/193 · MKM 123 · LOB-EN001 · OP01-001 · OGN 179/298"
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding()) {

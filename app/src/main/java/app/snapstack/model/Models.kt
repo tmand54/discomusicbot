@@ -6,7 +6,9 @@ enum class Game(val id: String, val label: String, val short: String) {
     POKEMON("pkm", "Pokémon", "PKM"),
     MAGIC("mtg", "Magic", "MTG"),
     YUGIOH("ygo", "Yu-Gi-Oh!", "YGO"),
-    LORCANA("lor", "Lorcana", "LOR");
+    LORCANA("lor", "Lorcana", "LOR"),
+    ONE_PIECE("op", "One Piece", "OP"),
+    RIFTBOUND("rb", "Riftbound", "RB");
 
     companion object {
         fun fromId(id: String?): Game? = entries.firstOrNull { it.id == id }
@@ -51,7 +53,7 @@ data class Card(
 
     val displayNumber: String
         get() = when (game) {
-            Game.YUGIOH -> number
+            Game.YUGIOH, Game.ONE_PIECE -> number
             else -> "#$number"
         }
 

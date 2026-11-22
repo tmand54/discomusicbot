@@ -9,6 +9,7 @@ import app.snapstack.data.net.Http
 import app.snapstack.data.source.LorcanaSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.Game
 import app.snapstack.scan.ScanSession
@@ -31,6 +32,8 @@ class AppGraph(val app: Application) {
                 Game.MAGIC to MagicSource(http),
                 Game.YUGIOH to YugiohSource(http),
                 Game.LORCANA to LorcanaSource(http),
+                Game.ONE_PIECE to TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op"),
+                Game.RIFTBOUND to TcgCsvSource(http, Game.RIFTBOUND, TcgCsvSource.RIFTBOUND_CATEGORY, "rb"),
             ),
         )
     }

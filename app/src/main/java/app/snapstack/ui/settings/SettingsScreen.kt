@@ -247,7 +247,8 @@ fun SettingsScreen() {
         Text(
             "SnapStack ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no tracking. " +
                 "Card text is read on-device with ML Kit; only the card number is sent to look a card up.\n\n" +
-                "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!) and Lorcast (Lorcana). " +
+                "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
+                "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound). " +
                 "Prices are TCGplayer market prices in USD where available. SnapStack is not affiliated with, endorsed or " +
                 "sponsored by any card game publisher, TCGplayer, or the data providers. All card names and images are " +
                 "property of their respective owners.",

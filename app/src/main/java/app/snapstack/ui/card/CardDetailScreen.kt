@@ -161,7 +161,7 @@ fun CardDetailScreen(cardId: String, onBack: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 32.dp)) {
             item {
                 Row(Modifier.padding(16.dp)) {
-                    CardImage(c.imageLarge ?: c.imageSmall, Modifier.width(150.dp), corner = 10.dp, contentDescription = c.name)
+                    CardImage(c.imageLarge ?: c.imageSmall, Modifier.width(150.dp), corner = 10.dp, contentDescription = c.name, fallbackUrl = c.imageSmall)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         GameBadge(c.game)
@@ -289,6 +289,8 @@ private fun tcgplayerSearch(c: Card): String {
         app.snapstack.model.Game.MAGIC -> "magic"
         app.snapstack.model.Game.YUGIOH -> "yugioh"
         app.snapstack.model.Game.LORCANA -> "lorcana-tcg"
+        app.snapstack.model.Game.ONE_PIECE -> "one-piece-card-game"
+        app.snapstack.model.Game.RIFTBOUND -> "riftbound-league-of-legends-trading-card-game"
     }
     return "https://www.tcgplayer.com/search/$game/product?q=${query(c)}"
 }

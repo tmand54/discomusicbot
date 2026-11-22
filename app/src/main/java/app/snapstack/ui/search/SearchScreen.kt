@@ -33,6 +33,8 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -92,7 +94,40 @@ class SearchViewModel : ViewModel() {
     val error = MutableStateFlow<String?>(null)
     val importLines = MutableStateFlow<List<ImportLine>>(emptyList())
     val importing = MutableStateFlow(false)
+    /** For catalog games (One Piece, Riftbound): sets on device vs. all sets. */
+    val catalog = MutableStateFlow<Pair<Int, Int>?>(null)
+    val catalogProgress = MutableStateFlow<Pair<Int, Int>?>(null)
     private var job: Job? = null
+
+    init { refreshCatalog() }
+
+    fun selectGame(g: Game) {
+        game.value = g
+        refreshCatalog()
+    }
+
+    private fun refreshCatalog() {
+        val g = game.value
+        catalog.value = null
+        if (!graph.cards.isCatalogGame(g)) return
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) { graph.cards.catalogStatus(g) }
+            if (game.value == g) catalog.value = status
+        }
+    }
+
+    fun downloadCatalog(thenSearch: String) {
+        if (catalogProgress.value != null) return
+        val g = game.value
+        viewModelScope.launch {
+            catalogProgress.value = 0 to 0
+            runCatching { graph.cards.downloadCatalog(g) { d, t -> catalogProgress.value = d to t } }
+                .onFailure { error.value = "Download failed — check your connection" }
+            catalogProgress.value = null
+            refreshCatalog()
+            if (thenSearch.isNotBlank()) search(thenSearch)
+        }
+    }
 
     fun search(q: String) {
         job?.cancel()
@@ -164,18 +199,54 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Game.entries.forEach { g ->
-                FilterChip(selected = game == g, onClick = { vm.game.value = g; if (query.isNotBlank()) vm.search(query) }, label = { Text(g.label) })
+                FilterChip(selected = game == g, onClick = { vm.selectGame(g); if (query.isNotBlank()) vm.search(query) }, label = { Text(g.label) })
             }
         }
         OutlinedTextField(
             value = query, onValueChange = { query = it }, singleLine = true,
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
             trailingIcon = { if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) },
-            placeholder = { Text(if (game == Game.YUGIOH) "Name or set code (LOB-EN001)" else "Card name") },
+            placeholder = {
+                Text(
+                    when (game) {
+                        Game.YUGIOH -> "Name or set code (LOB-EN001)"
+                        Game.ONE_PIECE -> "Name or number (OP01-001)"
+                        Game.RIFTBOUND -> "Name or number (179/298)"
+                        else -> "Card name"
+                    }
+                )
+            },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { vm.search(query) }),
             modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
+        val catalog by vm.catalog.collectAsState()
+        val progress by vm.catalogProgress.collectAsState()
+        catalog?.let { (have, all) ->
+            if (have < all || progress != null) Card(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        "${game.label} cards are searched on your phone — $have of $all sets downloaded. " +
+                            "Scanning works without this: each set downloads the first time you scan a card from it.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    val p = progress
+                    if (p != null) {
+                        LinearProgressIndicator(
+                            progress = { if (p.second > 0) p.first.toFloat() / p.second else 0f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text("Downloading ${p.first} / ${p.second} sets…", style = MaterialTheme.typography.labelSmall)
+                    } else {
+                        Button(onClick = { vm.downloadCatalog(query) }) { Text("Download all ${game.label} sets") }
+                    }
+                }
+            }
+        }
         val list = results
         when {
             error != null -> Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))

@@ -4,6 +4,7 @@ import app.snapstack.data.net.Http
 import app.snapstack.data.source.LorcanaSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.CardSet
 import app.snapstack.model.Game
@@ -63,6 +64,34 @@ class LiveSourcesTest {
         val set = src.fetchSetCards(CardSet(Game.YUGIOH, "Legend of Blue Eyes White Dragon", "Legend of Blue Eyes White Dragon", null, null))
         assertTrue(set.cards.any { it.number == "LOB-EN001" })
         println("ygo ${card.name} ${card.prices}; set printings ${set.cards.size}")
+    }
+
+    @Test fun onePiece() = runBlocking {
+        val src = TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op")
+        val sets = src.fetchSets()
+        val op01 = sets.first { it.abbreviation == "OP01" }
+        assertTrue(sets.size > 50)
+        val cards = src.fetchSetCards(op01).cards
+        val zoro = cards.filter { it.number == "OP01-001" }.sortedBy { TcgCsvSource.specialness(it.name) }
+        assertTrue("regular + parallel", zoro.size >= 2)
+        assertTrue(zoro.first().name.startsWith("Roronoa Zoro"))
+        assertTrue(zoro.first().prices.isNotEmpty())
+        assertTrue(TcgCsvSource.specialness(zoro.last().name) > TcgCsvSource.specialness(zoro.first().name))
+        val repriced = src.fetchPrices(zoro)
+        assertEquals(zoro.size, repriced.size)
+        println("onepiece ${zoro.map { it.name to it.prices }} sets=${sets.size} op01=${cards.size}")
+    }
+
+    @Test fun riftbound() = runBlocking {
+        val src = TcgCsvSource(http, Game.RIFTBOUND, TcgCsvSource.RIFTBOUND_CATEGORY, "rb")
+        val sets = src.fetchSets()
+        val ogn = sets.first { it.abbreviation == "OGN" }
+        val cards = src.fetchSetCards(ogn).cards
+        val c = cards.first { it.number == "119/298" }
+        assertTrue(c.name.startsWith("Ahri"))
+        assertTrue(c.prices.isNotEmpty())
+        assertTrue(cards.any { it.number.removeSuffix("/298").toIntOrNull()?.let { n -> n > 298 } == true })
+        println("riftbound ${c.name} ${c.prices} ${c.rarity} sets=${sets.size} ogn=${cards.size} codes=${sets.mapNotNull { it.abbreviation }}")
     }
 
     @Test fun lorcana() = runBlocking {

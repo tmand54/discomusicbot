@@ -5,16 +5,20 @@ import app.snapstack.data.db.Database
 import app.snapstack.data.source.CardSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.Card
 import app.snapstack.model.CardSet
 import app.snapstack.model.Game
 import app.snapstack.model.normalizeNumber
+import app.snapstack.scan.CardTextParser
 import app.snapstack.scan.LorcanaKey
 import app.snapstack.scan.MagicKey
 import app.snapstack.scan.NameKey
+import app.snapstack.scan.OnePieceKey
 import app.snapstack.scan.PokemonKey
 import app.snapstack.scan.PokemonPromoKey
+import app.snapstack.scan.RiftboundKey
 import app.snapstack.scan.ScanKey
 import app.snapstack.scan.TextMatch
 import app.snapstack.scan.YugiohKey
@@ -26,7 +30,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDate
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 enum class ResolvedFrom { MEMORY, DEVICE, NETWORK }
@@ -57,6 +64,17 @@ class CardRepository(
     private val priceJobs = ConcurrentHashMap<String, Deferred<Card?>>()
 
     fun source(game: Game) = sources.getValue(game)
+
+    /** Games whose names are searched in the on-device catalog (no search API). */
+    fun isCatalogGame(game: Game) = source(game) is TcgCsvSource
+
+    init {
+        // Teach the parser every Riftbound set code we already know about.
+        scope.launch { runCatching { registerRiftboundCodes() } }
+    }
+
+    private fun registerRiftboundCodes() =
+        CardTextParser.registerRiftboundCodes(db.getSets(Game.RIFTBOUND).mapNotNull { it.abbreviation })
 
     fun getCached(id: String): Card? = db.getCard(id)
 
@@ -93,6 +111,82 @@ class CardRepository(
         is PokemonKey -> resolvePokemon(key)
         is PokemonPromoKey -> resolvePokemonPromo(key)
         is NameKey -> resolveName(key)
+        is OnePieceKey -> resolveOnePiece(key)
+        is RiftboundKey -> resolveRiftbound(key)
+    }
+
+    private fun abbrevKey(a: String?) = a?.uppercase(Locale.US)?.filter { it.isLetterOrDigit() }
+
+    /** "OP01-001": the set prefix names the TCGplayer group (OP01, ST-01, EB01, PRB01; P = promos). */
+    private suspend fun resolveOnePiece(key: OnePieceKey): Resolution {
+        val code = key.code.uppercase(Locale.US)
+        var matches = db.findByNumber(Game.ONE_PIECE, code)
+        var from = ResolvedFrom.DEVICE
+        val prefix = code.substringBefore('-')
+        if (matches.isEmpty()) {
+            from = ResolvedFrom.NETWORK
+            ensureSetList(Game.ONE_PIECE)
+            val sets = db.getSets(Game.ONE_PIECE)
+            val primary = sets.filter { abbrevKey(it.abbreviation) == prefix }
+            val candidates = primary.ifEmpty {
+                if (prefix == "P") sets.filter { it.name.contains("Promo", true) }.take(6) else emptyList()
+            }
+            downloadSets(candidates)
+            matches = db.findByNumber(Game.ONE_PIECE, code)
+        }
+        if (matches.isEmpty()) return Resolution(null)
+        return rankPrintings(matches, prefix, from)
+    }
+
+    /** "OGN • 179/298": set code (when readable) → TCGplayer group; the number/total picks the card. */
+    private suspend fun resolveRiftbound(key: RiftboundKey): Resolution {
+        ensureSetList(Game.RIFTBOUND)
+        val number = if (key.total != null) "${key.number}/${key.total}" else key.number
+        val prefixMatch = key.total == null
+        val sets = db.getSets(Game.RIFTBOUND)
+        val inSet = key.set?.let { code -> sets.filter { it.abbreviation.equals(code, true) } }.orEmpty()
+        var from = ResolvedFrom.DEVICE
+        var matches = if (inSet.isNotEmpty()) {
+            if (inSet.any { it.cachedAt == 0L }) from = ResolvedFrom.NETWORK
+            downloadSets(inSet)
+            db.findByNumber(Game.RIFTBOUND, number, prefixMatch, inSet.map { it.code })
+        } else emptyList()
+        if (matches.isEmpty()) matches = db.findByNumber(Game.RIFTBOUND, number, prefixMatch)
+        if (matches.isEmpty() && inSet.isEmpty()) {
+            // Set code unreadable: fetch the main sets (promo groups are skipped) and look again.
+            from = ResolvedFrom.NETWORK
+            val main = sets.filter { it.cachedAt == 0L && !Regex("promo|bundle|judge", RegexOption.IGNORE_CASE).containsMatchIn(it.name) }
+            downloadSets(main.take(10))
+            matches = db.findByNumber(Game.RIFTBOUND, number, prefixMatch)
+        }
+        if (matches.isEmpty()) return Resolution(null)
+        return rankPrintings(matches, key.set, from)
+    }
+
+    private suspend fun downloadSets(sets: List<CardSet>) = coroutineScope {
+        val gate = Semaphore(4)
+        sets.filter { it.cachedAt == 0L }.map { s -> async { gate.withPermit { runCatching { ensureSetCached(s) } } } }.awaitAll()
+    }
+
+    /**
+     * Several printings share one number (regular, parallel, alt art, promo reprints): pick the regular
+     * one from the expected set and offer the rest. Flag it when a pricier printing could be the real one.
+     */
+    private fun rankPrintings(matches: List<Card>, setAbbrev: String?, from: ResolvedFrom): Resolution {
+        val abbrevBySet = db.getSets(matches.first().game).associate { it.code to abbrevKey(it.abbreviation) }
+        val want = abbrevKey(setAbbrev)
+        val sorted = matches.distinctBy { it.id }.sortedWith(
+            compareBy<Card>(
+                { TcgCsvSource.specialness(it.name) },
+                { if (want != null && abbrevBySet[it.setCode] == want) 0 else 1 },
+                { it.price(null) ?: Double.MAX_VALUE },
+            )
+        )
+        val best = sorted.first()
+        val others = sorted.drop(1)
+        val basePrice = best.price(null) ?: 0.0
+        val confident = others.none { (it.price(null) ?: 0.0) > basePrice * 2 + 1.0 }
+        return Resolution(best, others.take(12), confident, from)
     }
 
     private suspend fun bySetNumber(game: Game, setCode: String, number: String): Resolution {
@@ -206,6 +300,7 @@ class CardRepository(
                 try {
                     db.upsertSets(source(game).fetchSets())
                     settings.putLong("set_list_${game.id}", System.currentTimeMillis())
+                    if (game == Game.RIFTBOUND) registerRiftboundCodes()
                 } finally {
                     setListJobs.remove(game)
                 }
@@ -286,6 +381,10 @@ class CardRepository(
     suspend fun search(game: Game, query: String): List<Card> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()
+        if (isCatalogGame(game)) {
+            val byNumber = db.findByNumber(game, q, prefix = true)
+            return (byNumber + db.searchLocal(game, q, 150)).distinctBy { it.id }
+        }
         val results = source(game).search(q)
         if (game == Game.POKEMON && results.any { it.setName == it.setCode }) {
             runCatching { ensureSetList(Game.POKEMON) }
@@ -297,6 +396,29 @@ class CardRepository(
         }
         db.upsertCards(named)
         return named
+    }
+
+    /** (sets on device, all sets) for a game's catalog. */
+    suspend fun catalogStatus(game: Game): Pair<Int, Int> {
+        runCatching { ensureSetList(game) }
+        val sets = db.getSets(game)
+        return sets.count { it.cachedAt > 0 } to sets.size
+    }
+
+    /** Downloads every set of a game (used for name search in catalog games, and offline use). */
+    suspend fun downloadCatalog(game: Game, onProgress: (Int, Int) -> Unit) = coroutineScope {
+        ensureSetList(game)
+        val sets = db.getSets(game)
+        val todo = sets.filter { it.cachedAt == 0L }
+        var done = sets.size - todo.size
+        onProgress(done, sets.size)
+        val gate = Semaphore(4)
+        todo.map { s ->
+            async {
+                gate.withPermit { runCatching { ensureSetCached(s) } }
+                synchronized(this@CardRepository) { done++; onProgress(done, sets.size) }
+            }
+        }.awaitAll()
     }
 
     fun clearMemory() = memory.evictAll()

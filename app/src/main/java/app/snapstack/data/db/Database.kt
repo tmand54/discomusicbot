@@ -154,6 +154,23 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
         ).use { it.toCards() }
     }
 
+    /**
+     * Cards with this printed number in any set (or only in [setCodes]). With [prefix] a number
+     * typed without its total ("179") also matches "179/298".
+     */
+    fun findByNumber(game: Game, number: String, prefix: Boolean = false, setCodes: List<String>? = null): List<Card> {
+        val n = normalizeNumber(number)
+        val args = mutableListOf(game.id, n)
+        var sql = "SELECT * FROM cards WHERE game=? AND (number_norm=?"
+        if (prefix) { sql += " OR number_norm LIKE ?"; args += "$n/%" }
+        sql += ")"
+        if (setCodes != null) {
+            if (setCodes.isEmpty()) return emptyList()
+            sql += " AND set_code IN (${setCodes.joinToString(",") { "?" }})"; args += setCodes
+        }
+        return readableDatabase.rawQuery(sql, args.toTypedArray()).use { it.toCards() }
+    }
+
     fun cardsInSet(game: Game, setCode: String): List<Card> =
         readableDatabase.rawQuery(
             "SELECT * FROM cards WHERE game=? AND set_code=? ORDER BY CAST(number_norm AS INTEGER), number_norm",

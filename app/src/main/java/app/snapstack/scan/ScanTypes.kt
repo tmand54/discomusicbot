@@ -67,6 +67,19 @@ data class LorcanaKey(val set: String, val number: String) : ScanKey {
     override val label get() = "Set $set #$number"
 }
 
+data class OnePieceKey(val code: String) : ScanKey {
+    override val game get() = Game.ONE_PIECE
+    override val id get() = "op|${code.uppercase(Locale.US)}"
+    override val label get() = code.uppercase(Locale.US)
+}
+
+/** Riftbound prints "OGN • 179/298"; the set code is optional (it is not always readable). */
+data class RiftboundKey(val set: String?, val number: String, val total: String?) : ScanKey {
+    override val game get() = Game.RIFTBOUND
+    override val id get() = "rb|${number.lowercase(Locale.US).trimStart('0')}|${total ?: ""}"
+    override val label get() = listOfNotNull(set, if (total != null) "$number/$total" else number).joinToString(" ")
+}
+
 /** A card name to look up (typed lists, or a stubborn card snapped without a readable number). */
 data class NameKey(override val game: Game, val name: String, val number: String? = null) : ScanKey {
     override val id get() = "name|${game.id}|${TextMatch.norm(name)}|${number ?: ""}"
