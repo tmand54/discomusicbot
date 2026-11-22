@@ -12,7 +12,7 @@ enum class ScanSpeed(val label: String, val votes: Int, val description: String)
     CAREFUL("Careful", 3, "Three matching frames (two for a verified read). For glare, sleeves or toploaders."),
 }
 
-enum class ScanMode(val label: String) { RAPID("Rapid"), SINGLE("Single"), BINDER("Binder") }
+enum class ScanMode(val label: String) { RAPID("Rapid"), SINGLE("Single"), BINDER("Binder"), SLAB("Slab") }
 
 class Settings(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -42,8 +42,8 @@ class Settings(context: Context) {
     val backgroundRefresh = bool("background_refresh", true)
     val wifiOnly = bool("wifi_only", false)
     val showOcrStats = bool("show_ocr_stats", true)
-    /** Language of the One Piece cards being scanned: "EN" or "JP". */
-    val onePieceLanguage = string("op_language", "EN")
+    /** Optional PriceCharting API key: fills in graded (slab) values automatically. Stays on this phone. */
+    val priceChartingKey = string("pricecharting_key", "")
 
     fun getLong(key: String): Long = prefs.getLong(key, 0L)
     fun putLong(key: String, value: Long) = prefs.edit().putLong(key, value).apply()

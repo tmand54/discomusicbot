@@ -281,6 +281,23 @@ class CardRepository(
             .sortedWith(compareBy<Card>({ TcgCsvSource.specialness(it.name) }, { it.price(null) ?: Double.MAX_VALUE }))
     }
 
+    /**
+     * A One Piece code from a set that isn't out in English yet (Japan releases months earlier), e.g.
+     * "OP19-001" while English is at OP18. Misreads far outside the known sets don't count.
+     */
+    suspend fun isJapaneseOnlyCode(code: String): Boolean {
+        val m = Regex("^(OP|EB|ST|PRB)(\\d{2})-\\d{3}$").find(code.uppercase(Locale.US)) ?: return false
+        runCatching { ensureSetList(Game.ONE_PIECE) }
+        val sets = db.getSets(Game.ONE_PIECE)
+        if (TcgCsvSource.onePiecePrimaryGroups(code, sets).isNotEmpty()) return false
+        val kind = m.groupValues[1]
+        val n = m.groupValues[2].toInt()
+        val latest = sets.mapNotNull { s ->
+            Regex("(?:^|[^A-Z])$kind-?(\\d{2})").find(s.abbreviation?.uppercase(Locale.US).orEmpty())?.groupValues?.get(1)?.toIntOrNull()
+        }.maxOrNull() ?: return false
+        return n in (latest + 1)..(latest + 3)
+    }
+
     /** Other printings of the same card code (One Piece, Dragon Ball, Riftbound), for the card page. */
     suspend fun printingsOf(card: Card): List<Card> = when (card.game) {
         Game.ONE_PIECE -> otherPrintings(card)

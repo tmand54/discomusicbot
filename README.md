@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.7.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.7.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.8.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.8.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 The app used to be called SnapStack. Its internal app id (`app.snapstack`) hasn't changed, so
@@ -75,8 +75,8 @@ found ("Found in 12 ms · on device").
 
 ## Features
 
-* **Scan modes:** Rapid (cards in a stream), Single (confirm each card), and Binder (one photo
-  of a 2×2, 3×3, 3×4 or 4×4 page adds every pocket).
+* **Scan modes:** Rapid (cards in a stream), Single (confirm each card), Binder (one photo
+  of a 2×2, 3×3, 3×4 or 4×4 page adds every pocket), and Slab (graded cards, below).
 * **Snap button** takes a full-resolution photo for stubborn cards. **Type #** lets you enter a
   number by hand.
 * **Rips:** give the session a name and the pack price to see your pull value against cost. A
@@ -101,11 +101,22 @@ found ("Found in 12 ms · on device").
   Judge / tournament / prize promos, pre-release and release-event stamps, and Premium Booster
   reprints. Promo and reprint sets download once in the background (a few MB). Card pages show the
   same variants.
-* **Japanese One Piece:** set the scanner to *Japanese* (or mark a copy Japanese). Japanese cards
-  share codes and art with English, so they use the English catalog. Japanese-only cards from sets
-  not yet released in English are kept with the official Japanese image. There's no free Japanese
-  price feed, so Japanese copies are valued at the English price; set your own value on a copy, or
-  check the Yuyu-tei link on the card page.
+* **Graded slabs (PSA, Beckett/BGS, TAG, CGC, SGC):** switch the scanner to *Slab* and fit the whole
+  slab in the frame. The label gives the grader, grade (with Beckett subgrades) and cert number. The
+  card is identified from its own number through the case, or from the label's `#number` when
+  the case glare hides it. Two matching reads are needed before a slab is added. Slab copies are
+  saved with grader, grade and cert, and each slab stays a separate copy. You can also turn any
+  scanned card into a slab in its sheet.
+* **Slab values:** with a [PriceCharting](https://www.pricecharting.com/api-documentation) API key
+  (a paid PriceCharting subscription) in Settings → Graded card values, slabs are valued from graded
+  sold listings: PSA 10, BGS 10, CGC 10, SGC 10, and 9.5 / 9 / 8 / 7 for any grader. PriceCharting has
+  no TAG 10 price, and there's no free graded-price feed. Without a key, type the slab value; the
+  sheet links to eBay sold listings, PriceCharting, and the grader's cert lookup.
+* **Japanese One Piece:** Japanese copies are picked up automatically. A code from a set that's out
+  in Japan but not yet in English is added as Japanese, with the official Japanese image. Any other
+  card can be switched to Japanese in its sheet. Japanese cards share codes and art with English, so
+  they use the English catalog. There's no free Japanese price feed, so Japanese copies are valued at
+  the English price; set your own value on a copy, or check the Yuyu-tei link on the card page.
 * **One Piece DON!! cards:** the scanner recognises the DON!! logo. You then pick which DON!! card
   it is from a filterable list, with cards from the set you're opening shown first.
 
@@ -168,6 +179,9 @@ set automatically, and the Search tab has a one-tap **Download all sets** button
 
 I couldn't find a second Riftbound source that responded reliably, so Riftbound uses TCGplayer's
 catalog only.
+
+**Graded values** are the one optional, paid source: [PriceCharting](https://www.pricecharting.com/api-documentation)'s
+API, with your own key. The key is stored only on your phone and sent only to pricecharting.com.
 
 **Dragon Ball codes:**
 

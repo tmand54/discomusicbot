@@ -16,8 +16,8 @@ android {
         applicationId = "app.snapstack"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.7.0"
+        versionCode = 9
+        versionName = "1.8.0"
     }
 
     // ML Kit's on-device OCR is native code (~11 MB per ABI). Build a small APK per ABI plus a

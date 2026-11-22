@@ -10,6 +10,7 @@ import app.snapstack.data.net.Http
 import app.snapstack.data.source.LorcanaSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.PriceChartingSource
 import app.snapstack.data.source.OptcgApi
 import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.data.source.TcgPlayerFallback
@@ -49,7 +50,8 @@ class AppGraph(val app: Application) {
     }
     val collection: CollectionRepository by lazy { CollectionRepository(db, cards, settings) }
     val artMatcher: ArtMatcher by lazy { ArtMatcher(app) }
-    val session: ScanSession by lazy { ScanSession(cards, appScope, artMatcher) }
+    val priceCharting by lazy { PriceChartingSource(http) { settings.priceChartingKey.value } }
+    val session: ScanSession by lazy { ScanSession(cards, appScope, artMatcher, priceCharting) }
     val importer: CollectionImporter by lazy { CollectionImporter(app, db, cards, collection, appScope) }
 
     companion object {

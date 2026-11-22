@@ -3,6 +3,7 @@ package app.snapstack.scan
 import app.snapstack.data.CardRepository
 import app.snapstack.data.Resolution
 import app.snapstack.data.ResolvedFrom
+import app.snapstack.data.source.PriceChartingSource
 import app.snapstack.model.Card
 import app.snapstack.model.CollectionItem
 import app.snapstack.model.Condition
@@ -17,6 +18,9 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
 enum class ItemStatus { RESOLVING, READY, NOT_FOUND, ERROR }
+
+/** Where a slab's value came from. */
+enum class GradedLookup { NONE, LOOKING_UP, FOUND, NOT_FOUND, MANUAL }
 
 data class SessionItem(
     val uid: Long,
@@ -39,8 +43,13 @@ data class SessionItem(
     val artPicked: Boolean = false,
     /** "JP" for a Japanese copy (One Piece). */
     val language: String? = null,
+    /** A graded slab: grader, grade, cert, subgrades. */
+    val grading: Grading? = null,
+    /** The slab's value (from PriceCharting when a key is set, or typed in). */
+    val gradedValue: Double? = null,
+    val gradedLookup: GradedLookup = GradedLookup.NONE,
 ) {
-    val unitPrice: Double? get() = card?.price(variant)
+    val unitPrice: Double? get() = gradedValue ?: card?.price(variant)
     val total: Double get() = (unitPrice ?: 0.0) * qty
     /** Rapid mode never blocks: items that deserve a second look are flagged instead. */
     val needsReview: Boolean
@@ -55,6 +64,7 @@ class ScanSession(
     private val repo: CardRepository,
     private val scope: CoroutineScope,
     private val artMatcher: ArtMatcher? = null,
+    private val gradedPrices: PriceChartingSource? = null,
 ) {
     private val ids = AtomicLong(1)
     private val aliases = java.util.concurrent.ConcurrentHashMap<Long, Long>()
@@ -71,17 +81,22 @@ class ScanSession(
         private set
 
     /** [hints]: the text OCR saw on the card, used to catch misreads (see [CardRepository.resolve]). */
-    fun add(key: ScanKey, hints: List<String> = emptyList(), thumb: CardThumb? = null, language: String? = null): Long {
+    fun add(
+        key: ScanKey, hints: List<String> = emptyList(), thumb: CardThumb? = null,
+        language: String? = null, grading: Grading? = null,
+    ): Long {
         val uid = ids.getAndIncrement()
         val now = System.currentTimeMillis()
         if (_items.value.isEmpty()) startedAt = now
-        _items.update { listOf(SessionItem(uid, key, ItemStatus.RESOLVING, now, language = language)) + it }
+        _items.update { listOf(SessionItem(uid, key, ItemStatus.RESOLVING, now, language = language, grading = grading)) + it }
         scope.launch {
-            val japanese = language == Languages.JP
+            var japanese = language == Languages.JP || (key.game == Game.ONE_PIECE && looksNonLatin(hints))
             // Japanese cards don't print the English name, so don't use the OCR text to second-guess them.
             val r = repo.resolve(key, if (japanese) emptyList() else hints).let { res ->
                 // Japan gets sets months before the English release: keep the code as a Japanese card.
-                if (res.card == null && japanese && key is OnePieceKey) {
+                if (res.card == null && key is OnePieceKey && runCatching { repo.isJapaneseOnlyCode(key.code) }.getOrDefault(false)) {
+                    japanese = true
+                    update(uid) { copy(language = Languages.JP) }
                     Resolution(repo.japaneseOnly(key.code), from = ResolvedFrom.DEVICE)
                 } else res
             }
@@ -121,8 +136,9 @@ class ScanSession(
             if (thumb != null && alternatives.isNotEmpty()) {
                 matchArt(uid, card, alternatives, thumb, don = key is OnePieceDonKey, nameOk = nameOk, fallback = fallback)
             }
-            // Each DON!! card is picked by hand, so don't fold several DON!! scans into one row.
-            if (key !is OnePieceDonKey && mergeDuplicate(uid)) return@launch
+            if (grading != null) lookUpGradedValue(uid)
+            // Each DON!! card is picked by hand, and each slab is its own copy: don't fold those into one row.
+            if (key !is OnePieceDonKey && grading == null && mergeDuplicate(uid)) return@launch
             val current = _items.value.firstOrNull { it.uid == uid }?.card ?: card
             val priced = repo.ensurePriced(current)
             if (priced !== current) update(uid) {
@@ -195,6 +211,45 @@ class ScanSession(
 
     fun setLanguage(uid: Long, language: String?) = update(uid) { copy(language = language) }
 
+    /** Changes (or removes) the grading on an item and refreshes its graded value. */
+    fun setGrading(uid: Long, grading: Grading?) {
+        update(uid) { copy(grading = grading, gradedValue = null, gradedLookup = GradedLookup.NONE) }
+        if (grading != null) scope.launch { lookUpGradedValue(uid) }
+    }
+
+    /** A value typed by the user wins over the looked-up one; clearing it looks the value up again. */
+    fun setGradedValue(uid: Long, value: Double?) {
+        if (value != null) update(uid) { copy(gradedValue = value, gradedLookup = GradedLookup.MANUAL) }
+        else setGrading(uid, _items.value.firstOrNull { it.uid == uid }?.grading)
+    }
+
+    /** Edits the cert number without dropping the value already found for this grade. */
+    fun setCert(uid: Long, cert: String?) = update(uid) { copy(grading = grading?.copy(cert = cert?.trim()?.ifEmpty { null })) }
+
+    val canLookUpGradedValues: Boolean get() = gradedPrices?.enabled == true
+
+    private suspend fun lookUpGradedValue(uid: Long) {
+        val source = gradedPrices?.takeIf { it.enabled } ?: return
+        val item = _items.value.firstOrNull { it.uid == uid } ?: return
+        val card = item.card ?: return
+        val g = item.grading ?: return
+        val grade = g.grade ?: return
+        update(uid) { copy(gradedLookup = GradedLookup.LOOKING_UP) }
+        val price = runCatching { source.gradedPrice(card, g.grader, grade) }.getOrNull()
+        update(uid) {
+            val same = this.grading?.grader == g.grader && this.grading.grade == g.grade
+            if (!same || this.gradedLookup == GradedLookup.MANUAL) this
+            else copy(gradedValue = price, gradedLookup = if (price != null) GradedLookup.FOUND else GradedLookup.NOT_FOUND)
+        }
+    }
+
+    /** OCR of Japanese text through the Latin model yields almost no English words. */
+    private fun looksNonLatin(hints: List<String>): Boolean {
+        if (hints.size < 4) return false
+        val words = hints.sumOf { line -> Regex("[A-Za-z]{4,}").findAll(line).count() }
+        return words <= 1
+    }
+
     fun setVariant(uid: Long, variant: String) {
         val item = _items.value.firstOrNull { it.uid == uid } ?: return
         update(uid) { copy(variant = variant, variantChosen = true) }
@@ -230,6 +285,8 @@ class ScanSession(
         CollectionItem(
             cardId = s.card!!.id, variant = s.variant, condition = s.condition, qty = s.qty,
             priceAtAdd = s.unitPrice, addedAt = System.currentTimeMillis(), language = s.language,
+            grader = s.grading?.grader, grade = s.grading?.grade, notes = s.grading?.notes,
+            valueOverride = s.gradedValue,
         )
     }
 

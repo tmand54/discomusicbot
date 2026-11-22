@@ -23,6 +23,8 @@ import app.snapstack.model.RipSession
 import app.snapstack.model.Card
 import app.snapstack.scan.Box
 import app.snapstack.scan.Detection
+import app.snapstack.scan.Grading
+import app.snapstack.scan.SlabReader
 import app.snapstack.scan.OnePieceDonKey
 import app.snapstack.scan.TextMatch
 import app.snapstack.scan.CardTextParser
@@ -64,8 +66,8 @@ data class ScanUi(
     val flash: Long = 0,
     /** The camera image is blurry (card moving or lens refocusing): those frames are skipped. */
     val blurry: Boolean = false,
-    /** Language of One Piece cards being scanned: "EN" or "JP". */
-    val onePieceLanguage: String = "EN",
+    /** Slab mode: what the label says so far ("PSA 10"), shown while reading. */
+    val slab: String? = null,
 )
 
 class ScannerViewModel(app: Application) : AndroidViewModel(app) {
@@ -81,7 +83,6 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             mode = settings.mode(),
             game = Game.fromId(settings.scanGame.value),
             speed = settings.speed(),
-            onePieceLanguage = settings.onePieceLanguage.value,
         ).withGrid(settings.binderGrid.value)
     )
     val ui: StateFlow<ScanUi> = _ui.asStateFlow()
@@ -93,12 +94,16 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
     val analyzer = TextAnalyzer(
         parseExecutor,
         roiProvider = { w, h ->
-            val binder = _ui.value.mode == ScanMode.BINDER
-            Guide.inFrame(viewW, viewH, w, h, binder, if (binder) 0.04f else 0.08f)
+            val kind = guideKind()
+            Guide.inFrame(viewW, viewH, w, h, kind, if (kind == GuideKind.CARD) 0.08f else 0.04f)
         },
         onBlur = ::onBlur,
         cardProvider = { w, h ->
-            if (_ui.value.mode == ScanMode.BINDER) null else Guide.inFrame(viewW, viewH, w, h, false, 0f)
+            when (guideKind()) {
+                GuideKind.BINDER -> null
+                GuideKind.SLAB -> Guide.inFrame(viewW, viewH, w, h, GuideKind.SLAB, 0f)?.let { Guide.cardInSlab(it) }
+                GuideKind.CARD -> Guide.inFrame(viewW, viewH, w, h, GuideKind.CARD, 0f)
+            }
         },
         onFrame = ::onFrame,
     )
@@ -122,6 +127,12 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun region(frame: OcrFrame, binder: Boolean, grow: Float) =
         Guide.inFrame(viewW, viewH, frame.width, frame.height, binder, grow)
+
+    private fun guideKind() = when (_ui.value.mode) {
+        ScanMode.BINDER -> GuideKind.BINDER
+        ScanMode.SLAB -> GuideKind.SLAB
+        else -> GuideKind.CARD
+    }
     private var lastCommittedId: String? = null
     private var tone: ToneGenerator? = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 55) }.getOrNull()
 
@@ -175,6 +186,9 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         maybeRefocus(now)
+        if (state.mode == ScanMode.SLAB) {
+            onSlabFrame(frame, state, now, fps, ocr); return
+        }
         val inside = region(frame, false, 0.1f)
         val candidates = CardTextParser.parse(frame, state.game)
             .filter { it.score >= MIN_SCORE && Guide.contains(inside, it.box) }
@@ -188,13 +202,7 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         var best: Detection? = null
         var verified = false
         var suspicious = false
-        val japaneseOp = state.onePieceLanguage == Languages.JP
         for (d in candidates) {
-            if (japaneseOp && d.key.game == Game.ONE_PIECE) {
-                // Japanese cards don't print the English name: nothing to cross-check, plain voting.
-                if (best == null) best = d
-                continue
-            }
             val known = peek(d.key, now)
             val match = known.isNotEmpty() && known.any { TextMatch.cardNameScore(it.name, hints) >= 0.75 }
             if (match) { best = d; verified = true; break }
@@ -220,17 +228,45 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         if (pick != null && pick.key.id == commitId) commit(pick.key, hints, frame.thumb)
     }
 
-    private fun commit(scanned: ScanKey, hints: List<String> = emptyList(), thumb: app.snapstack.scan.CardThumb? = null) {
+    /**
+     * Slab mode: the label gives grader, grade and cert; the card is read from its own number through the
+     * case when possible (most precise), otherwise from the label's "#number" and name.
+     */
+    private fun onSlabFrame(frame: OcrFrame, state: ScanUi, now: Long, fps: Float, ocr: Long) {
+        val inside = Guide.inFrame(viewW, viewH, frame.width, frame.height, GuideKind.SLAB, 0.06f)
+        val lines = frame.lines.filter { Guide.contains(inside, it.box) }
+        val slab = SlabReader.read(lines)
+        val cardKey = slab?.let {
+            CardTextParser.parseLines(lines, state.game ?: it.game).firstOrNull { d -> d.score >= MIN_SCORE }?.key
+                ?: SlabReader.labelKey(it, state.game)
+        }
+        _ui.update {
+            it.copy(
+                fps = fps, ocrMs = ocr, slab = slab?.display,
+                detection = if (slab != null && cardKey != null) {
+                    LiveDetection("${slab.display} · ${cardKey.label}", null, frame.width, frame.height, cardKey.game, slab.cert != null)
+                } else null,
+            )
+        }
+        if (slab == null || cardKey == null || slab.grade == null) { voter.offer(null, now); return }
+        // A slab is a big-ticket item: always want two agreeing reads of grade, cert and card.
+        val commitId = voter.offer("${slab.id}|${cardKey.id}", now, maxOf(2, state.speed.votes)) ?: return
+        if (commitId.isNotEmpty()) commit(cardKey, lines.map { it.text }, frame.thumb, Grading.from(slab))
+    }
+
+    private fun commit(
+        scanned: ScanKey, hints: List<String> = emptyList(), thumb: app.snapstack.scan.CardThumb? = null,
+        grading: Grading? = null,
+    ) {
         val key = if (scanned is app.snapstack.scan.OnePieceDonKey && scanned.setHint == null) {
             // DON!! cards don't say which set they're from: assume the pack/deck being scanned.
             scanned.copy(setHint = session.items.value.firstOrNull { it.card?.game == Game.ONE_PIECE && it.card.number != "DON!!" }?.card?.setCode)
         } else scanned
         lastCommittedId = key.id
         feedback()
-        val language = if (key.game == Game.ONE_PIECE && _ui.value.onePieceLanguage == Languages.JP) Languages.JP else null
-        val uid = session.add(key, hints, thumb, language)
+        val uid = session.add(key, hints, thumb, grading = grading)
         _ui.update { it.copy(flash = SystemClock.elapsedRealtime(), message = null) }
-        if (_ui.value.mode == ScanMode.SINGLE) {
+        if (_ui.value.mode == ScanMode.SINGLE || _ui.value.mode == ScanMode.SLAB) {
             analyzer.paused = true
             _ui.update { it.copy(singleUid = uid) }
         }
@@ -250,12 +286,6 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         voter.reset()
         warmUp(game)
         _ui.update { it.copy(game = game, detection = null) }
-    }
-
-    fun setOnePieceLanguage(language: String) {
-        settings.onePieceLanguage.value = language
-        voter.reset()
-        _ui.update { it.copy(onePieceLanguage = language) }
     }
 
     fun setSpeed(speed: ScanSpeed) {
@@ -310,7 +340,10 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
                 viewModelScope.launch {
                     val frame = runCatching { TextAnalyzer.recognize(bitmap, rotation) }.getOrNull()
                     val thumb = frame?.let { f ->
-                        Guide.inFrame(viewW, viewH, f.width, f.height, false, 0f)?.let { guide ->
+                        val kind = guideKind()
+                        Guide.inFrame(viewW, viewH, f.width, f.height, kind, 0f)
+                            ?.let { if (kind == GuideKind.SLAB) Guide.cardInSlab(it) else it }
+                            ?.takeIf { kind != GuideKind.BINDER }?.let { guide ->
                             runCatching {
                                 app.snapstack.scan.ArtMatcher.thumbFromBitmap(
                                     bitmap, rotation, app.snapstack.scan.ArtMatcher.captureArea(guide, f.width, f.height),
@@ -349,6 +382,22 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
                     message = "Added ${keys.size} of ${state.binderRows * state.binderCols} pockets",
                 )
             }
+            return
+        }
+        if (state.mode == ScanMode.SLAB) {
+            val box = Guide.inFrame(viewW, viewH, frame.width, frame.height, GuideKind.SLAB, 0.1f)
+            val lines = frame.lines.filter { Guide.contains(box, it.box) }
+            val slab = SlabReader.read(lines)
+            val key = slab?.let {
+                CardTextParser.parseLines(lines, state.game ?: it.game).firstOrNull { d -> d.score >= 0.4 }?.key
+                    ?: SlabReader.labelKey(it, state.game)
+            }
+            _ui.update { it.copy(snapping = false) }
+            if (slab == null || key == null) {
+                _ui.update { it.copy(message = if (slab == null) "Couldn't read a grading label. Fit the whole slab in the frame." else "Read ${slab.display}, but not the card. Try Type #.") }
+                return
+            }
+            commit(key, lines.map { it.text }, frame.thumb, Grading.from(slab))
             return
         }
         val inside = region(frame, false, 0.2f)

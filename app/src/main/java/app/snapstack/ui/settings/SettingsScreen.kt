@@ -158,6 +158,8 @@ fun SettingsScreen() {
     val adjust by s.conditionAdjusted.flow.collectAsState()
     val bg by s.backgroundRefresh.flow.collectAsState()
     val wifi by s.wifiOnly.flow.collectAsState()
+    val pcKey by s.priceChartingKey.flow.collectAsState()
+    var keyDialog by remember { mutableStateOf(false) }
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { vm.backup(it, context) }
@@ -223,6 +225,12 @@ fun SettingsScreen() {
             s.backgroundRefresh.value = it; vm.reschedule(context)
         }
         Toggle("Only on Wi-Fi", null, wifi) { s.wifiOnly.value = it; vm.reschedule(context) }
+        Action(
+            "Graded card values",
+            if (pcKey.isBlank()) "Add a PriceCharting API key to value PSA, BGS, CGC, SGC and TAG slabs automatically. " +
+                "Without one, scanned slabs use the price you enter."
+            else "PriceCharting key added — slabs are valued from graded sold listings. Tap to change or remove.",
+        ) { keyDialog = true }
         if (!notifGranted) ListItem(
             modifier = Modifier.clickable { if (Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
             headlineContent = { Text("Allow price alert notifications") },
@@ -246,10 +254,11 @@ fun SettingsScreen() {
             "TCG Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no tracking. " +
                 "Card text is read on-device with ML Kit; only the card number is sent to look a card up.\n\n" +
                 "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
-                "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound). Backups when a source is down or has no price: " +
+                "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound, Dragon Ball). Backups when a source is down or has no price: " +
                 "the TCGplayer catalog (Pokémon, Magic, Yu-Gi-Oh!, Lorcana) and optcgapi.com (One Piece search and prices). " +
+                "Graded values: PriceCharting, with your own key. " +
                 "Prices are TCGplayer market prices in USD where available. TCG Portfolio is not affiliated with, endorsed or " +
-                "sponsored by any card game publisher, TCGplayer, or the data providers. All card names and images are " +
+                "sponsored by any card game publisher, grading company, TCGplayer, or the data providers. All card names and images are " +
                 "property of their respective owners.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -263,6 +272,41 @@ fun SettingsScreen() {
     }
 
     if (offline) OfflineSheet(vm, onDismiss = { offline = false; vm.loadCounts() })
+    if (keyDialog) PriceChartingKeyDialog(pcKey, onDismiss = { keyDialog = false }) { s.priceChartingKey.value = it.trim(); keyDialog = false }
+}
+
+@Composable
+private fun PriceChartingKeyDialog(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var key by remember { mutableStateOf(current) }
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Graded card values") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Slab values (PSA 10, BGS 9.5, CGC, SGC, TAG…) come from PriceCharting's graded sold listings. " +
+                        "Their API needs a key from a PriceCharting subscription. The key stays on this phone and is only " +
+                        "sent to pricecharting.com.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = key, onValueChange = { key = it }, singleLine = true, label = { Text("API key") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                androidx.compose.material3.TextButton(onClick = { uri.openUri("https://www.pricecharting.com/api-documentation") }) {
+                    Text("Where do I get a key?")
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { onSave(key) }) { Text("Save") } },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = { if (current.isNotBlank()) onSave("") else onDismiss() }) {
+                Text(if (current.isNotBlank()) "Remove key" else "Cancel")
+            }
+        },
+    )
 }
 
 @Composable

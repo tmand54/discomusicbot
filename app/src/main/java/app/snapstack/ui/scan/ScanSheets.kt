@@ -1,5 +1,10 @@
 package app.snapstack.ui.scan
 
+import app.snapstack.scan.GradedLookup
+import app.snapstack.scan.Grading
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.foundation.verticalScroll
+import android.net.Uri
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -80,7 +85,7 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp).imePadding()) {
             Row(verticalAlignment = Alignment.Top) {
                 CardImage(item.card?.imageLarge ?: item.card?.imageSmall, Modifier.width(112.dp), corner = 8.dp, fallbackUrl = item.card?.imageSmall)
                 Spacer(Modifier.width(16.dp))
@@ -105,6 +110,17 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
                             card.rarity?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             Spacer(Modifier.height(8.dp))
                             Text(money(item.unitPrice), style = MaterialTheme.typography.headlineSmall.merge(Numeric), fontWeight = FontWeight.Bold)
+                            item.grading?.let { g ->
+                                Text(
+                                    g.display + when (item.gradedLookup) {
+                                        GradedLookup.FOUND -> " value · PriceCharting"
+                                        GradedLookup.MANUAL -> " value · yours"
+                                        GradedLookup.LOOKING_UP -> " · looking up value…"
+                                        else -> " · raw price shown"
+                                    },
+                                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                             item.artScore?.let { score ->
                                 Text(
                                     (if (item.artPicked) "Printing picked by artwork" else "Artwork compared") +
@@ -201,6 +217,8 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
                     )
                 }
 
+                GradedSection(vm, item)
+
                 if (card.allVariants.size > 1) {
                     Spacer(Modifier.height(12.dp))
                     Text("Printing", style = MaterialTheme.typography.labelLarge)
@@ -219,11 +237,13 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
-                Text("Condition", style = MaterialTheme.typography.labelLarge)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Condition.entries.forEach { c ->
-                        FilterChip(selected = item.condition == c, onClick = { vm.session.setCondition(item.uid, c) }, label = { Text(c.code) })
+                if (item.grading == null) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("Condition", style = MaterialTheme.typography.labelLarge)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Condition.entries.forEach { c ->
+                            FilterChip(selected = item.condition == c, onClick = { vm.session.setCondition(item.uid, c) }, label = { Text(c.code) })
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -238,6 +258,79 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
                 Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text(if (single) "Next card" else "Done") }
             }
         }
+    }
+}
+
+private val graders = listOf("PSA", "BGS", "TAG", "CGC", "SGC")
+private val commonGrades = listOf("10", "9.5", "9", "8.5", "8", "7", "6", "5")
+
+/**
+ * Graded slab: grader, grade, cert and the slab's value. Filled in by Slab mode; any scanned card can be
+ * switched to graded here too. Values come from PriceCharting when the user added a key, otherwise from
+ * the user (with one-tap links to eBay sold listings and PriceCharting to check).
+ */
+@Composable
+private fun GradedSection(vm: ScannerViewModel, item: SessionItem) {
+    val card = item.card ?: return
+    val g = item.grading
+    val uri = LocalUriHandler.current
+    Spacer(Modifier.height(12.dp))
+    Text("Graded slab", style = MaterialTheme.typography.labelLarge)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = g == null, onClick = { vm.session.setGrading(item.uid, null) }, label = { Text("Raw") })
+        graders.forEach { name ->
+            FilterChip(
+                selected = g?.grader == name,
+                onClick = { vm.session.setGrading(item.uid, Grading(name, g?.grade ?: "10", g?.cert)) },
+                label = { Text(name) },
+            )
+        }
+    }
+    if (g == null) return
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        (listOfNotNull(g.grade?.takeIf { it !in commonGrades }) + commonGrades).forEach { grade ->
+            FilterChip(
+                selected = g.grade == grade,
+                onClick = { vm.session.setGrading(item.uid, g.copy(grade = grade, gradeLabel = null)) },
+                label = { Text(grade) },
+            )
+        }
+    }
+    if (g.subgrades.isNotEmpty()) Text(
+        g.subgrades.entries.joinToString(" · ") { (k, v) -> k.replaceFirstChar { it.uppercase() } + " " + v },
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    var cert by remember(item.uid) { mutableStateOf(g.cert.orEmpty()) }
+    var value by remember(item.uid) { mutableStateOf(if (item.gradedLookup == GradedLookup.MANUAL) item.gradedValue?.let { "%.2f".format(it) }.orEmpty() else "") }
+    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(
+            value = cert, onValueChange = { cert = it; vm.session.setCert(item.uid, it) },
+            label = { Text("Cert #") }, singleLine = true, modifier = Modifier.weight(1f),
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = { t -> value = t; vm.session.setGradedValue(item.uid, t.replace(',', '.').replace("$", "").trim().toDoubleOrNull()) },
+            label = { Text("Slab value $") }, singleLine = true, modifier = Modifier.weight(1f),
+            placeholder = { item.gradedValue?.takeIf { item.gradedLookup == GradedLookup.FOUND }?.let { Text("%.2f".format(it)) } },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        )
+    }
+    Text(
+        when (item.gradedLookup) {
+            GradedLookup.LOOKING_UP -> "Looking up the ${g.display} value…"
+            GradedLookup.FOUND -> "${g.display} value from PriceCharting sold listings. Type your own to override."
+            GradedLookup.NOT_FOUND -> "No ${g.display} sales found for this card on PriceCharting. Check eBay sold listings and type the value."
+            GradedLookup.MANUAL -> "Using your value for this slab."
+            GradedLookup.NONE -> if (vm.session.canLookUpGradedValues) "Pick a grade to look up its value."
+            else "Graded values need a PriceCharting key (Settings). Until then, check sold listings and type the value — the raw price is used otherwise."
+        },
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val query = listOfNotNull(card.name, card.displayNumber, g.grader, g.grade).joinToString(" ")
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        TextButton(onClick = { uri.openUri("https://www.ebay.com/sch/i.html?_nkw=${Uri.encode(query)}&LH_Sold=1&LH_Complete=1") }) { Text("eBay sold") }
+        TextButton(onClick = { uri.openUri("https://www.pricecharting.com/search-products?type=prices&q=${Uri.encode("${card.name} ${card.displayNumber}")}") }) { Text("PriceCharting") }
+        g.verifyUrl?.let { url -> TextButton(onClick = { uri.openUri(url) }) { Text(if (g.cert != null && g.grader in setOf("PSA", "CGC")) "Verify cert" else "Cert lookup") } }
     }
 }
 
@@ -331,7 +424,7 @@ private fun ReviewRow(item: SessionItem, onClick: () -> Unit, onQty: (Int) -> Un
         Column(Modifier.weight(1f)) {
             Text(item.card?.title ?: item.key.label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             val sub = when (item.status) {
-                ItemStatus.READY -> "${item.card!!.setName} · ${Variants.label(item.variant)} · ${item.condition.code}"
+                ItemStatus.READY -> "${item.card!!.setName} · ${Variants.label(item.variant)} · ${item.grading?.display ?: item.condition.code}"
                 ItemStatus.RESOLVING -> "Looking up ${item.key.label}…"
                 ItemStatus.NOT_FOUND -> "No match for ${item.key.label} — tap to remove"
                 ItemStatus.ERROR -> "Lookup failed — tap to remove"

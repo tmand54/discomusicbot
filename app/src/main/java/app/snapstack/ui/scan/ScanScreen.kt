@@ -140,9 +140,6 @@ fun ScanScreen(onClose: () -> Unit, onOpenCard: (String) -> Unit) {
         Column(Modifier.fillMaxWidth().statusBarsPadding()) {
             TopControls(ui, vm, onClose)
             GameChips(ui.game, vm::setGame)
-            if (ui.game == null || ui.game == Game.ONE_PIECE) {
-                OnePieceLanguageChips(ui.onePieceLanguage, vm::setOnePieceLanguage)
-            }
             val stickyVariant = ui.game?.let { sticky[it] } ?: sticky.entries.singleOrNull()?.value
             val stickyGame = ui.game ?: sticky.entries.singleOrNull()?.key
             if (stickyVariant != null && stickyGame != null) {
@@ -244,20 +241,6 @@ private fun GameChips(selected: Game?, onSelect: (Game?) -> Unit) {
     }
 }
 
-/** One Piece cards print the same codes in English and Japanese: say which ones are being scanned. */
-@Composable
-private fun OnePieceLanguageChips(language: String, onSelect: (String) -> Unit) {
-    val colors = FilterChipDefaults.filterChipColors(
-        containerColor = Color.Black.copy(alpha = 0.45f), labelColor = Color.White,
-        selectedContainerColor = MaterialTheme.colorScheme.tertiary, selectedLabelColor = Color.Black,
-    )
-    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("One Piece", color = Color.White, style = MaterialTheme.typography.labelMedium)
-        FilterChip(selected = language != "JP", onClick = { onSelect("EN") }, label = { Text("English") }, colors = colors, border = null)
-        FilterChip(selected = language == "JP", onClick = { onSelect("JP") }, label = { Text("Japanese") }, colors = colors, border = null)
-    }
-}
-
 @Composable
 private fun StatusLine(ui: ScanUi, showStats: Boolean) {
     val text = when {
@@ -266,6 +249,8 @@ private fun StatusLine(ui: ScanUi, showStats: Boolean) {
         ui.detection?.verified == true -> "✓ ${ui.detection.label}"
         ui.detection != null -> "Reading ${ui.detection.label}"
         ui.blurry -> "Hold steady — focusing…"
+        ui.mode == ScanMode.SLAB && ui.slab != null -> "Read ${ui.slab} — looking for the card…"
+        ui.mode == ScanMode.SLAB -> "Fit the whole slab — label and card — in the frame"
         ui.mode == ScanMode.SINGLE -> "Hold one card inside the frame"
         else -> "Slide cards under the camera, one after another"
     }
@@ -298,7 +283,10 @@ private fun ScanOverlay(ui: ScanUi, modifier: Modifier) {
     val accent = MaterialTheme.colorScheme.secondary
     Canvas(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         val binder = ui.mode == ScanMode.BINDER
-        val g = Guide.inView(size.width, size.height, binder)
+        val g = Guide.inView(
+            size.width, size.height,
+            when (ui.mode) { ScanMode.BINDER -> GuideKind.BINDER; ScanMode.SLAB -> GuideKind.SLAB; else -> GuideKind.CARD },
+        )
         val guideW = g.w
         val guideH = g.h
         val left = g.left
@@ -306,6 +294,10 @@ private fun ScanOverlay(ui: ScanUi, modifier: Modifier) {
         drawRect(Color.Black.copy(alpha = 0.45f))
         drawRoundRect(Color.Transparent, Offset(left, top), Size(guideW, guideH), CornerRadius(28f), blendMode = BlendMode.Clear)
         drawRoundRect(Color.White.copy(alpha = 0.85f), Offset(left, top), Size(guideW, guideH), CornerRadius(28f), style = Stroke(3f))
+        if (ui.mode == ScanMode.SLAB) {
+            val y = top + guideH * 0.27f
+            drawLine(Color.White.copy(alpha = 0.5f), Offset(left, y), Offset(left + guideW, y), 2f)
+        }
         if (binder) {
             for (c in 1 until ui.binderCols) {
                 val x = left + guideW * c / ui.binderCols

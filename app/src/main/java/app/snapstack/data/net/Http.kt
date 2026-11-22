@@ -49,6 +49,7 @@ class Http(cacheDir: File?, userAgent: String) {
         "api.tcgdex.net" to 20L,
         "tcgcsv.com" to 50L,
         "optcgapi.com" to 100L,
+        "www.pricecharting.com" to 400L,
     )
     private val hostLocks = ConcurrentHashMap<String, Mutex>()
     private val lastCall = ConcurrentHashMap<String, Long>()
