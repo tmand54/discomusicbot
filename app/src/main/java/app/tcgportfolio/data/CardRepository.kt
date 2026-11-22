@@ -643,50 +643,128 @@ class CardRepository(
 
     // ------------------------------------------------------------------ search
 
+    /**
+     * The game's sets for recognising set words in a search. Pokémon's set list has no abbreviations,
+     * so TCGplayer's ("OBF", "MEW", "PFL") are added as aliases to the set names.
+     */
+    suspend fun setIndex(game: Game): SetIndex {
+        runCatching { ensureSetList(game) }
+        val sets = db.getSets(game)
+        val aliases = if (game == Game.POKEMON) {
+            // Two-letter ones ("ex", "ar", "tr") are also card words, so only longer abbreviations.
+            tcgplayer?.let { tp -> runCatching { tp.pokemonSetAbbreviations() }.getOrDefault(emptyMap()) }.orEmpty()
+                .filterKeys { it.length >= 3 && it !in SearchQuery.PRINTING_WORDS }
+        } else emptyMap()
+        return SetIndex(sets, aliases)
+    }
+
+    /** Word search over the cards on the phone (see [SearchQuery]). */
+    fun searchLocal(game: Game, query: SearchQuery, index: SetIndex, limit: Int = 400): List<Card> {
+        if (query.isEmpty) return emptyList()
+        val words = query.tokens.filter { it !in SearchQuery.PRINTING_WORDS }.map { it.substringBefore('/') }.filter { it.isNotEmpty() }
+        if (words.isEmpty()) return emptyList()
+        val setCodes = words.associateWith { w -> index.setsFor(w).map { it.code } }.filterValues { it.isNotEmpty() }
+        return query.rank(db.searchWords(game, words, setCodes, limit), index)
+    }
+
+    /**
+     * Search by any words in any order: name, set (code, abbreviation or name), number, rarity, printing.
+     * "robin eb03 sp": sets named in the search are downloaded first, the name words go to the online
+     * name search, and every result has to match every word.
+     */
     suspend fun search(game: Game, query: String): List<Card> {
-        val q = query.trim()
-        if (q.isEmpty()) return emptyList()
-        if (isCatalogGame(game)) {
-            val byNumber = db.findByNumber(game, q, prefix = true)
-            val local = (byNumber + db.searchLocal(game, q, 150)).distinctBy { it.id }
-            val api = optcg
-            if (game != Game.ONE_PIECE || api == null) return local
-            // Online name search: optcgapi gives the card codes, the TCGplayer catalog gives the printings.
-            val codes = runCatching { api.search(q) }.getOrDefault(emptyList())
-                .map { it.code }.filter { Regex("^((OP|ST|EB|PRB)\\d{2}|P)-\\d{3}$").matches(it) }.distinct().take(16)
-            val online = coroutineScope {
-                val gate = Semaphore(3)
-                codes.map { code ->
-                    async {
-                        gate.withPermit {
-                            runCatching { resolve(OnePieceKey(code)) }.getOrNull()
-                                ?.let { r -> listOfNotNull(r.card) + r.alternatives }.orEmpty()
-                        }
-                    }
-                }.awaitAll().flatten()
-            }.filter { c -> c.name.contains(q, ignoreCase = true) || TextMatch.nameScore(c.name, listOf(q)) >= 0.8 }
-            return (local + online).distinctBy { it.id }
+        val q = SearchQuery(query)
+        if (q.isEmpty) return emptyList()
+        val index = setIndex(game)
+
+        // Sets named in the search ("eb03", "obf"): make sure their cards are on the phone.
+        val named = q.tokens.filter { index.isSet(it) }.flatMap { index.setsFor(it) }.distinctBy { it.code }
+        if (named.size <= 3) coroutineScope {
+            named.filter { it.cachedAt == 0L }.map { s -> async { runCatching { ensureSetCached(s) } } }.awaitAll()
         }
-        val results = source(game).search(q)
+
+        val names = q.nameQueries(index)
+        val core = q.nameCore(index)
+        val online: List<Card> = when {
+            isCatalogGame(game) -> if (game == Game.ONE_PIECE && core != null) onePieceOnline(core) else emptyList()
+            names.isEmpty() && game != Game.POKEMON -> emptyList()
+            else -> apiSearch(game, q, names, core, named)
+        }
+        var local = searchLocal(game, q, index)
+        // One word that is both a name and a set ("mew" / the 151 set): it's the name when that finds cards.
+        if (q.tokens.size == 1 && online.any { q.matchesName(it) }) local = local.filter { q.matchesName(it) }
+        return q.rank((online + local).distinctBy { it.id }, index)
+    }
+
+    /**
+     * Pokémon rarity words ("sir", "hyper") as TCGdex filters, with the named sets: TCGdex's search results
+     * carry no rarity, so "charizard obf sir" has to ask TCGdex for that rarity directly.
+     */
+    private suspend fun pokemonByRarity(q: SearchQuery, names: List<String>, sets: List<CardSet>): List<Card> {
+        val src = source(Game.POKEMON) as? PokemonSource ?: return emptyList()
+        val all = src.rarities()
+        val rarities = q.tokens.flatMap { PokemonSource.raritiesFor(it, all) }.distinct().take(3)
+        if (rarities.isEmpty()) return emptyList()
+        val setIds: List<String?> = sets.map { it.code }.take(2).ifEmpty { listOf(null) }
+        val nameOptions: List<String?> = names.ifEmpty { listOf(null) }
+        for (name in nameOptions) {
+            if (name == null && setIds.all { it == null }) return emptyList()
+            val found = coroutineScope {
+                rarities.flatMap { r -> setIds.map { set -> async { runCatching { src.searchFiltered(name, r, set) }.getOrDefault(emptyList()) } } }
+                    .awaitAll().flatten()
+            }
+            if (found.isNotEmpty()) return found
+        }
+        return emptyList()
+    }
+
+    /** Name search through the game's API, trying fewer words until something comes back. */
+    private suspend fun apiSearch(game: Game, q: SearchQuery, names: List<String>, core: String?, sets: List<CardSet>): List<Card> {
+        var results: List<Card> = if (game == Game.POKEMON) pokemonByRarity(q, names, sets) else emptyList()
+        if (results.isEmpty()) for (name in names) {
+            // Scryfall understands set filters itself, so old printings aren't cut off by its result limit.
+            val text = if (game == Game.MAGIC && sets.isNotEmpty()) "$name (${sets.joinToString(" or ") { "e:${it.code}" }})" else name
+            results = runCatching { source(game).search(text) }.getOrElse { e -> if (name == names.last()) throw e else emptyList() }
+            if (results.isNotEmpty()) break
+        }
         if (game == Game.POKEMON && results.any { it.setName == it.setCode }) {
             runCatching { ensureSetList(Game.POKEMON) }
         }
-        val named = results.map { c ->
+        val fixed = results.map { c ->
             if (c.game == Game.POKEMON && c.setName == c.setCode) {
                 db.getSet(Game.POKEMON, c.setCode)?.let { c.copy(setName = it.name) } ?: c
             } else c
         }
         // Newest promos often reach TCGplayer weeks before TCGdex: add the ones TCGdex doesn't list.
-        val promos = if (game == Game.POKEMON) tcgplayer?.let { tp ->
-            runCatching { tp.searchPokemonPromos(q) }.getOrDefault(emptyList()).filter { (prefix, c) ->
+        val promoName = core ?: names.lastOrNull()
+        val promos = if (game == Game.POKEMON && promoName != null) tcgplayer?.let { tp ->
+            runCatching { tp.searchPokemonPromos(promoName) }.getOrDefault(emptyList()).filter { (prefix, c) ->
                 val code = PokemonSource.promoSets[prefix]
                 val digits = TcgPlayerFallback.promoDigits(c.number)
-                named.none { it.setCode == code && TcgPlayerFallback.promoDigits(it.number) == digits }
+                fixed.none { it.setCode == code && TcgPlayerFallback.promoDigits(it.number) == digits }
             }.map { it.second }
         }.orEmpty() else emptyList()
-        val all = named + promos
+        val all = fixed + promos
         db.upsertCards(all)
         return all
+    }
+
+    /** One Piece by name without every set downloaded: optcgapi gives the codes, the TCGplayer catalog the printings. */
+    private suspend fun onePieceOnline(name: String): List<Card> {
+        val api = optcg ?: return emptyList()
+        val codes = runCatching { api.search(name) }.getOrDefault(emptyList())
+            .map { it.code }.filter { Regex("^((OP|ST|EB|PRB)\\d{2}|P)-\\d{3}$").matches(it) }.distinct().take(16)
+        return coroutineScope {
+            val gate = Semaphore(3)
+            codes.map { code ->
+                async {
+                    gate.withPermit {
+                        runCatching { resolve(OnePieceKey(code)) }.getOrNull()
+                            ?.let { r -> listOfNotNull(r.card) + r.alternatives }.orEmpty()
+                    }
+                }
+            }.awaitAll().flatten()
+        }
     }
 
     /** (sets on device, all sets) for a game's catalog. */

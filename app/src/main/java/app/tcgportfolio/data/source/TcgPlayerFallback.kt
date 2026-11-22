@@ -100,6 +100,11 @@ class TcgPlayerFallback(http: Http) {
         }
     }
 
+    /** TCGplayer's Pokémon set abbreviations ("OBF" → "SV03: Obsidian Flames"), for set words in searches. */
+    suspend fun pokemonSetAbbreviations(): Map<String, List<String>> =
+        groups(Game.POKEMON).filter { !it.abbreviation.isNullOrBlank() }
+            .groupBy({ it.abbreviation!!.lowercase(java.util.Locale.US) }, { it.name })
+
     private suspend fun promoGroup(prefix: String): CardSet? {
         val name = PROMO_GROUPS[prefix] ?: return null
         return groups(Game.POKEMON).firstOrNull { it.name.equals(name, ignoreCase = true) }

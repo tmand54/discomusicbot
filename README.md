@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.12.1-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.12.1-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.13.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.13.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
@@ -93,6 +93,12 @@ found ("Found in 12 ms · on device").
 * **Collection:** search, sort and filter by game, plus set progress (owned / total, with the
   missing cards shown dimmed) and a wantlist. Hold a card to start selecting, tap more (or
   **Select all**), then **Delete** to remove them all at once, with Undo.
+* **Search by any words, in any order:** name, set code / abbreviation / name, number, rarity
+  (or its initials) and printing. For example `robin eb03 sp`, `luffy op05 alt`, `charizard obf sir`,
+  `pikachu 25`, `lightning bolt mkm foil`, `dark magician lob`. A set named in the search is
+  downloaded first, so `eb03 sp` lists every SP card in EB03. Pokémon set abbreviations come from
+  TCGplayer's set list, and Pokémon rarities are sent to TCGdex as a filter. The Collection tab's
+  search box takes the same words.
 * **Card details:** prices for each printing, price history, your copies, links to TCGplayer
   and eBay sold listings, and sharing.
 * **Copies:** each copy records printing, condition, quantity, purchase price, grading

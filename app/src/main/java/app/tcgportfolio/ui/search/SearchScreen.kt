@@ -1,5 +1,7 @@
 package app.tcgportfolio.ui.search
 
+import app.tcgportfolio.data.SetIndex
+import app.tcgportfolio.data.SearchQuery
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -133,7 +135,10 @@ class SearchViewModel : ViewModel() {
             loading.value = true; error.value = null
             val g = game.value
             // Instant local hits first, then the full online results.
-            results.value = withContext(Dispatchers.IO) { graph.db.searchLocal(g, q, 40) }
+            results.value = withContext(Dispatchers.IO) {
+                // Sets already on the phone are enough to recognise set words for the instant results.
+                graph.cards.searchLocal(g, SearchQuery(q), SetIndex(graph.db.getSets(g)), 60)
+            }
             runCatching { graph.cards.search(g, q) }
                 .onSuccess { results.value = it }
                 .onFailure { if (results.value.isNullOrEmpty()) error.value = "Search failed — check your connection" }
@@ -172,11 +177,13 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
             placeholder = {
                 Text(
                     when (game) {
-                        Game.YUGIOH -> "Name or set code (LOB-EN001)"
-                        Game.ONE_PIECE -> "Name or number (OP01-001)"
-                        Game.RIFTBOUND -> "Name or number (179/298)"
-                        Game.DRAGON_BALL -> "Name or number (FB01-001)"
-                        else -> "Card name"
+                        Game.POKEMON -> "charizard obf sir · pikachu 25"
+                        Game.MAGIC -> "lightning bolt mkm · sheoldred foil"
+                        Game.YUGIOH -> "dark magician lob · LOB-EN005"
+                        Game.LORCANA -> "elsa first chapter · enchanted"
+                        Game.ONE_PIECE -> "robin eb03 sp · luffy op05 alt"
+                        Game.RIFTBOUND -> "jinx ogn · 179/298"
+                        Game.DRAGON_BALL -> "goku fb01 · FB01-001"
                     }
                 )
             },
@@ -220,7 +227,8 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
             error != null -> Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
             list == null -> EmptyState(
                 Icons.Outlined.Search, "Find any card",
-                "Search ${game.label} by name. Results come from free public card databases, priced in USD (TCGplayer market).",
+                "Search ${game.label} by any words, in any order: name, set code or name, number, rarity, or printing " +
+                    "(alt, sp, parallel, foil). Results come from free public card databases, priced in USD (TCGplayer market).",
             )
             list.isEmpty() && !loading -> Text("No cards found.", modifier = Modifier.padding(16.dp))
             else -> LazyVerticalGrid(

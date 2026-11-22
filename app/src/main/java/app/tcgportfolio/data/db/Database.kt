@@ -215,6 +215,27 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
         ).use { it.toCards() }
     }
 
+    /**
+     * Pre-filter for a word search: every word must appear in the name, set name, number or rarity, or the
+     * card must be in one of the sets that word names ([setCodes]). [SearchQuery] then does the exact matching.
+     */
+    fun searchWords(game: Game, words: List<String>, setCodes: Map<String, Collection<String>>, limit: Int = 400): List<Card> {
+        if (words.isEmpty()) return emptyList()
+        val args = mutableListOf(game.id)
+        val clauses = words.map { w ->
+            val like = "%$w%"
+            args += listOf(like, like, like, like)
+            val codes = setCodes[w].orEmpty()
+            args += codes
+            "(name LIKE ? OR set_name LIKE ? OR number LIKE ? OR IFNULL(rarity, '') LIKE ?" +
+                (if (codes.isNotEmpty()) " OR set_code IN (${codes.joinToString(",") { "?" }})" else "") + ")"
+        }
+        return readableDatabase.rawQuery(
+            "SELECT * FROM cards WHERE game=? AND ${clauses.joinToString(" AND ")} ORDER BY priced_at DESC LIMIT $limit",
+            args.toTypedArray(),
+        ).use { it.toCards() }
+    }
+
     fun cachedCardCount(game: Game): Int =
         readableDatabase.rawQuery("SELECT COUNT(*) FROM cards WHERE game=?", arrayOf(game.id)).use {
             if (it.moveToFirst()) it.getInt(0) else 0

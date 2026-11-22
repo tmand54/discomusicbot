@@ -198,4 +198,38 @@ class LiveSourcesTest {
         val found = tp.searchPokemonPromos("kyogre")
         assertTrue(found.any { (prefix, c) -> prefix == "MEP" && TcgPlayerFallback.promoDigits(c.number) == "117" })
     }
+
+    @Test fun wordSearchOnRealCatalogs() = runBlocking {
+        // One Piece: "robin eb03 sp" over the real EB03 set and Romance Dawn.
+        val op = TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op")
+        val sets = op.fetchSets()
+        val index = SetIndex(sets)
+        val eb03 = sets.first { it.abbreviation == "EB03" }
+        val cards = op.fetchSetCards(eb03).cards + op.fetchSetCards(sets.first { it.abbreviation == "OP01" }).cards
+        val hits = SearchQuery("robin eb03 sp").rank(cards, index)
+        println("robin eb03 sp -> " + hits.map { "${it.name} ${it.number} ${it.rarity}" })
+        assertEquals(1, hits.size)
+        assertTrue(hits.single().name.contains("Robin") && hits.single().name.contains("(SP)"))
+        assertTrue(SearchQuery("robin eb03").rank(cards, index).size >= 3)
+
+        // Pokémon: TCGdex name results filtered by TCGplayer's set abbreviation and the rarity's initials.
+        val tp = TcgPlayerFallback(http)
+        val aliases = tp.pokemonSetAbbreviations().filterKeys { it.length >= 3 && it !in SearchQuery.PRINTING_WORDS }
+        val pokemon = PokemonSource(http)
+        val pIndex = SetIndex(pokemon.fetchSets(), aliases)
+        val q = SearchQuery("charizard obf sir")
+        assertEquals(listOf("charizard obf", "charizard"), q.nameQueries(pIndex))
+        // As the app does: "obf" names a set, "sir" a TCGdex rarity, both sent as TCGdex filters.
+        val obf = q.tokens.flatMap { pIndex.setsFor(it) }.distinctBy { it.code }
+        assertEquals(listOf("sv03"), obf.map { it.code })
+        val rarity = q.tokens.flatMap { PokemonSource.raritiesFor(it, pokemon.rarities()) }
+        assertEquals(listOf("Special illustration rare"), rarity)
+        val raw = pokemon.searchFiltered("charizard", rarity.single(), "sv03")
+        val names = pokemon.fetchSets().associate { it.code to it.name }
+        val found = q.rank(raw.map { it.copy(setName = names[it.setCode] ?: it.setName) }, pIndex)
+        println("charizard obf sir -> " + found.map { "${it.id} ${it.name} ${it.setName} ${it.rarity}" })
+        assertEquals(listOf("pkm:sv03-223"), found.map { it.id })
+        // No name at all: every SIR in Obsidian Flames.
+        assertEquals(6, pokemon.searchFiltered(null, rarity.single(), "sv03").size)
+    }
 }

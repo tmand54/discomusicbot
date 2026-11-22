@@ -1,5 +1,6 @@
 package app.tcgportfolio.data.source
 
+import java.util.Locale
 import app.tcgportfolio.data.net.Http
 import app.tcgportfolio.model.Card
 import app.tcgportfolio.model.CardSet
@@ -81,8 +82,20 @@ class PokemonSource(
         }.awaitAll().filterNotNull()
     }
 
-    override suspend fun search(query: String): List<Card> {
-        val arr = http.getJsonArray("$base/cards?name=${query.urlEncode()}&pagination:itemsPerPage=80") ?: return emptyList()
+    override suspend fun search(query: String): List<Card> = searchFiltered(query, null, null)
+
+    /**
+     * Name search with TCGdex's own exact filters on rarity and/or set. Its results don't include the
+     * rarity, so cards found through a rarity filter are tagged with it.
+     */
+    suspend fun searchFiltered(name: String?, rarity: String?, setId: String?): List<Card> {
+        val params = listOfNotNull(
+            name?.takeIf { it.isNotBlank() }?.let { "name=${it.urlEncode()}" },
+            rarity?.let { "rarity=${"eq:$it".urlEncode()}" },
+            setId?.let { "set.id=${"eq:$it".urlEncode()}" },
+        )
+        if (params.isEmpty()) return emptyList()
+        val arr = http.getJsonArray("$base/cards?${params.joinToString("&")}&pagination:itemsPerPage=80") ?: return emptyList()
         return buildList {
             for (i in 0 until arr.length()) {
                 val c = arr.getJSONObject(i)
@@ -95,12 +108,21 @@ class PokemonSource(
                 add(
                     Card(
                         id = "pkm:$id", game = game, name = c.optString("name"), setCode = setCode,
-                        setName = setNameLookup(setCode) ?: setCode, number = localId,
+                        setName = setNameLookup(setCode) ?: setCode, number = localId, rarity = rarity,
                         imageSmall = image?.let { "$it/low.webp" }, imageLarge = image?.let { "$it/high.webp" },
                     )
                 )
             }
         }.reversed() // newest sets first
+    }
+
+    @Volatile private var rarityNames: List<String>? = null
+
+    /** TCGdex's rarity names ("Special illustration rare", "Hyper rare"…). */
+    suspend fun rarities(): List<String> = rarityNames ?: run {
+        val arr = runCatching { http.getJsonArray("$base/rarities") }.getOrNull()
+        val list = arr?.let { a -> List(a.length()) { a.getString(it) } }?.filter { it != "None" }?.takeIf { it.isNotEmpty() } ?: KNOWN_RARITIES
+        list.also { rarityNames = it }
     }
 
     private fun parseDetail(o: JSONObject): Card {
@@ -149,6 +171,29 @@ class PokemonSource(
             pocketId.matches(setId) || (imageOrLogo?.contains("/tcgp/") == true)
 
         /** Black Star promo prefixes printed on cards -> TCGdex set ids. */
+        /** Used when TCGdex's rarity list can't be fetched. */
+        val KNOWN_RARITIES = listOf(
+            "ACE SPEC Rare", "Amazing Rare", "Black White Rare", "Classic Collection", "Common", "Double rare",
+            "Full Art Trainer", "Holo Rare", "Holo Rare V", "Holo Rare VMAX", "Holo Rare VSTAR", "Hyper rare",
+            "Illustration rare", "LEGEND", "Mega Attack Rare", "Mega Hyper Rare", "Promo", "Radiant Rare", "Rare",
+            "Rare Holo", "Rare Holo LV.X", "Rare PRIME", "Secret Rare", "Shiny Ultra Rare", "Shiny rare",
+            "Special illustration rare", "Ultra Rare", "Uncommon",
+        )
+
+        /**
+         * The rarities a search word means: by initials ("sir", "ir", "hr", "sr") or a distinctive word
+         * ("hyper", "secret", "illustration"). Generic words that would match most rarities are ignored.
+         */
+        fun raritiesFor(word: String, all: List<String>): List<String> {
+            val w = word.lowercase(Locale.US)
+            if (w.length < 2 || w in setOf("rare", "holo", "v", "ex")) return emptyList()
+            val hits = all.filter { r ->
+                val words = r.lowercase(Locale.US).split(Regex("[^a-z0-9.]+")).filter { it.isNotEmpty() }
+                w == r.lowercase(Locale.US) || w == words.joinToString("") { it.take(1) } || (w.length >= 4 && words.any { it.startsWith(w) })
+            }
+            return if (hits.size in 1..3) hits else emptyList()
+        }
+
         val promoSets = mapOf(
             "SWSH" to "swshp", "SVP" to "svp", "SM" to "smp", "XY" to "xyp", "BW" to "bwp",
             "MEP" to "mep", "DP" to "dpp", "HGSS" to "hgssp",

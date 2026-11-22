@@ -1,5 +1,8 @@
 package app.tcgportfolio.ui.collection
 
+import kotlinx.coroutines.flow.flowOn
+import app.tcgportfolio.data.SetIndex
+import app.tcgportfolio.data.SearchQuery
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
 import app.tcgportfolio.model.CollectionItem
@@ -119,6 +122,11 @@ class CollectionViewModel : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val wantlist = graph.collection.wantlist.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Every game's sets on the phone, so set words ("eb03", "mkm") work in the collection search. */
+    val setIndex = kotlinx.coroutines.flow.flow { emit(SetIndex(Game.entries.flatMap { graph.db.getSets(it) })) }
+        .flowOn(kotlinx.coroutines.Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SetIndex.EMPTY)
+
     /** Card ids selected with a long press on the Cards tab. */
     val selection = MutableStateFlow<Set<String>>(emptySet())
     /** The last bulk delete, kept until its Undo snackbar goes away. */
@@ -223,11 +231,9 @@ private fun CardsTab(vm: CollectionViewModel, onOpenCard: (String) -> Unit, onSc
         ) { Button(onClick = onScan) { Icon(Icons.Filled.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("Scan cards") } }
         return
     }
-    val q = query.trim().lowercase()
-    val shown = all.filter { s ->
-        (game == null || s.card.game == game) &&
-            (q.isEmpty() || s.card.name.lowercase().contains(q) || s.card.setName.lowercase().contains(q) || s.card.number.lowercase() == q)
-    }.let { list ->
+    val index by vm.setIndex.collectAsState()
+    val words = remember(query) { SearchQuery(query) }
+    val shown = all.filter { s -> (game == null || s.card.game == game) && (words.isEmpty || words.matches(s.card, index)) }.let { list ->
         when (sort) {
             SortBy.RECENT -> list.sortedByDescending { it.lastAdded }
             SortBy.VALUE -> list.sortedByDescending { it.value }
@@ -270,7 +276,7 @@ private fun CardsTab(vm: CollectionViewModel, onOpenCard: (String) -> Unit, onSc
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, singleLine = true,
-                    placeholder = { Text("Search name, set or #") },
+                    placeholder = { Text("Name, set, number, rarity…") },
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
                     modifier = Modifier.weight(1f),
                 )
