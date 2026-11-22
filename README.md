@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.12.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.12.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.12.1-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.12.1-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
@@ -172,6 +172,7 @@ set automatically, and the Search tab has a one-tap **Download all sets** button
 | --- | --- |
 | A Pokémon, Magic, Yu-Gi-Oh! or Lorcana card has no price, or its source is unreachable | TCGplayer's catalog (tcgcsv.com), matched by set, number and name |
 | TCGdex is down, or doesn't have a brand-new Pokémon set yet | TCGplayer's catalog, using the set code printed on the card (`PAL`, `DLR`…) |
+| TCGdex doesn't list a new Black Star promo yet (e.g. Kyogre `MEP 117`) | TCGplayer's promo set for that era, when scanning, typing the code, or searching by name |
 | Searching One Piece by name | [optcgapi.com](https://optcgapi.com), so you don't need every set downloaded |
 | tcgcsv.com can't price a One Piece card | optcgapi.com market prices |
 

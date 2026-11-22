@@ -186,4 +186,16 @@ class LiveSourcesTest {
         assertTrue(src.search("elsa").isNotEmpty())
         println("lorcana ${card.title} ${card.prices}")
     }
+
+    @Test fun newestPromosComeFromTcgplayerWhenTcgdexLacksThem() = runBlocking {
+        val tp = TcgPlayerFallback(http)
+        val kyogre = tp.findPokemonPromo("MEP", "117")
+        assertTrue(kyogre.isNotEmpty())
+        assertTrue(kyogre.all { it.name.startsWith("Kyogre") })
+        println("MEP 117: " + kyogre.map { "${it.name} ${it.prices}" })
+        val swsh = tp.findPokemonPromo("SWSH", "045")
+        assertTrue(swsh.isNotEmpty())
+        val found = tp.searchPokemonPromos("kyogre")
+        assertTrue(found.any { (prefix, c) -> prefix == "MEP" && TcgPlayerFallback.promoDigits(c.number) == "117" })
+    }
 }

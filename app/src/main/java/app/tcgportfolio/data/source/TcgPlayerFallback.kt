@@ -78,7 +78,49 @@ class TcgPlayerFallback(http: Http) {
         }
     }
 
+    /**
+     * A Black Star promo from TCGplayer's promo set for its era ("MEP" + "117"), for promos TCGdex
+     * hasn't added yet. Every printing of that number is returned (regular, Pokémon Center…).
+     */
+    suspend fun findPokemonPromo(prefix: String, number: String): List<Card> {
+        val group = promoGroup(prefix) ?: return emptyList()
+        val want = promoDigits(number)
+        return cards(Game.POKEMON, group).filter { promoDigits(ImportParsing.numberOnly(it.number)) == want }
+    }
+
+    /** Name search in the current promo sets (MEP, SVP): the promos most likely missing from TCGdex. */
+    suspend fun searchPokemonPromos(query: String, prefixes: List<String> = listOf("MEP", "SVP")): List<Pair<String, Card>> {
+        val q = query.trim()
+        if (q.length < 2) return emptyList()
+        return prefixes.flatMap { prefix ->
+            val group = runCatching { promoGroup(prefix) }.getOrNull() ?: return@flatMap emptyList()
+            runCatching { cards(Game.POKEMON, group) }.getOrDefault(emptyList())
+                .filter { it.name.contains(q, ignoreCase = true) }
+                .map { prefix to it }
+        }
+    }
+
+    private suspend fun promoGroup(prefix: String): CardSet? {
+        val name = PROMO_GROUPS[prefix] ?: return null
+        return groups(Game.POKEMON).firstOrNull { it.name.equals(name, ignoreCase = true) }
+    }
+
     companion object {
+        /** TCGplayer's set for each era's Black Star promos, by the prefix printed on the card. */
+        val PROMO_GROUPS = mapOf(
+            "MEP" to "ME: Mega Evolution Promo",
+            "SVP" to "SV: Scarlet & Violet Promo Cards",
+            "SWSH" to "SWSH: Sword & Shield Promo Cards",
+            "SM" to "SM Promos",
+            "XY" to "XY Promos",
+            "BW" to "Black and White Promos",
+            "HGSS" to "HGSS Promos",
+            "DP" to "Diamond and Pearl Promos",
+        )
+
+        /** "SWSH045", "SVP EN 178", "117", "MEP 117" → "45", "178", "117", "117". */
+        fun promoDigits(number: String): String = normalizeNumber(number.filter { it.isDigit() })
+
         /** The TCGplayer product that is this card: same number, and a matching name. */
         fun bestProduct(card: Card, products: List<Card>): Card? {
             val want = normalizeNumber(ImportParsing.numberOnly(card.number))

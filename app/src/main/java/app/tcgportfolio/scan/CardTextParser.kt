@@ -30,7 +30,7 @@ object CardTextParser {
     private val lorcanaTail = Regex("^[\\s\\W_]{0,4}(EN|DE|FR|IT|JA|ZH)[\\s\\W_]{0,4}(\\d{1,2})(?!\\d)")
     private val pokemonAbbrev = Regex("(?:^|\\s)([A-Z]{3})\\s*(?:EN)?\\s*$")
     private val pokemonPromo = Regex(
-        "(?<![A-Za-z0-9])(SWSH|SVP|SM|XY|BW|MEP|DP|HGSS)\\s?(?:EN\\s?)?($LOOSE_DIGIT{2,3})(?![0-9A-Za-z/])"
+        "(?<![A-Za-z0-9])(SWSH|SVP|SM|XY|BW|MEP|ME|DP|HGSS)\\s?(?:EN\\s?)?($LOOSE_DIGIT{2,3})(?![0-9A-Za-z/])"
     )
     private val magicSetLang = Regex(
         "(?<![A-Za-z0-9])([A-Z0-9]{3,5})\\s?[•·.*\\-+‧∙●]?\\s?(EN|DE|FR|IT|ES|SP|PT|JA|JP|KO|RU|ZHS|ZHT|PH)(?![A-Za-z0-9])"
@@ -180,7 +180,8 @@ object CardTextParser {
                 out += Detection(PokemonKey(number, totalRaw, abbrev, nameHints), score, line.box)
             }
             if (allowed(Game.POKEMON)) for (m in pokemonPromo.findAll(line.text)) {
-                val prefix = m.groupValues[1]
+                // "ME 117" is how Mega Evolution Black Star promos are often written: the MEP set.
+                val prefix = m.groupValues[1].let { if (it == "ME") "MEP" else it }
                 if (prefix !in PokemonSource.promoSets) continue
                 val digits = digitsLoose(m.groupValues[2])
                 if (!digits.all { it.isDigit() }) continue
@@ -324,6 +325,17 @@ object CardTextParser {
                 return OnePieceKey("${m.groupValues[1]}${digitsLoose(m.groupValues[2])}-${digitsLoose(m.groupValues[3])}")
             }
             if (game == Game.ONE_PIECE) onePiecePromo.find(upper)?.let { return OnePieceKey("P-${digitsLoose(it.groupValues[1])}") }
+        }
+        if (game == null || game == Game.POKEMON) {
+            // Black Star promos: "SWSH045", "SVP 178", "MEP 117" / "ME117", optionally after the name.
+            pokemonPromo.find(upper)?.let { m ->
+                val prefix = m.groupValues[1].let { if (it == "ME") "MEP" else it }
+                val digits = digitsLoose(m.groupValues[2])
+                if (prefix in PokemonSource.promoSets && digits.all { it.isDigit() }) {
+                    val name = text.substring(0, m.range.first).trim().takeIf { it.isNotEmpty() }
+                    return PokemonPromoKey(prefix, digits, listOfNotNull(name))
+                }
+            }
         }
         if (game == null || game == Game.RIFTBOUND) {
             Regex("^(?:([A-Z]{3})\\s*[-•·.: ]?\\s*)?(\\d{1,3}[A-Z]?\\*?)(?:\\s*/\\s*(\\d{2,3}))?$").find(upper)?.let { m ->

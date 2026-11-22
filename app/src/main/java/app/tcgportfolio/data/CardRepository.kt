@@ -456,9 +456,15 @@ class CardRepository(
         ensureSetList(Game.POKEMON)
         val setCode = PokemonSource.promoSets[key.prefix] ?: return Resolution(null)
         val set = db.getSet(Game.POKEMON, setCode) ?: CardSet(Game.POKEMON, setCode, "${key.prefix} Promos", null, null)
-        var matches = findInSets(listOf(set), key.prefix + key.number)
+        var matches = runCatching { findInSets(listOf(set), key.prefix + key.number) }.getOrDefault(emptyList())
         if (matches.isEmpty()) matches = db.findByNumberInSets(Game.POKEMON, listOf(setCode), key.number)
-        if (matches.isEmpty()) return Resolution(null)
+        if (matches.isEmpty()) {
+            // A promo too new for TCGdex (or TCGdex is down): TCGplayer's promo set for that era.
+            val found = tcgplayer?.let { tp -> runCatching { tp.findPokemonPromo(key.prefix, key.number) }.getOrDefault(emptyList()) }.orEmpty()
+            if (found.isEmpty()) return Resolution(null)
+            db.upsertCards(found)
+            return rankByName(found, key.nameHints).copy(from = ResolvedFrom.NETWORK)
+        }
         return rankByName(matches, key.nameHints)
     }
 
@@ -670,8 +676,17 @@ class CardRepository(
                 db.getSet(Game.POKEMON, c.setCode)?.let { c.copy(setName = it.name) } ?: c
             } else c
         }
-        db.upsertCards(named)
-        return named
+        // Newest promos often reach TCGplayer weeks before TCGdex: add the ones TCGdex doesn't list.
+        val promos = if (game == Game.POKEMON) tcgplayer?.let { tp ->
+            runCatching { tp.searchPokemonPromos(q) }.getOrDefault(emptyList()).filter { (prefix, c) ->
+                val code = PokemonSource.promoSets[prefix]
+                val digits = TcgPlayerFallback.promoDigits(c.number)
+                named.none { it.setCode == code && TcgPlayerFallback.promoDigits(it.number) == digits }
+            }.map { it.second }
+        }.orEmpty() else emptyList()
+        val all = named + promos
+        db.upsertCards(all)
+        return all
     }
 
     /** (sets on device, all sets) for a game's catalog. */

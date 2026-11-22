@@ -240,4 +240,23 @@ class CardTextParserTest {
         assertTrue(name is NameKey)
         assertNull(CardTextParser.parseTyped("Lightning Bolt", null))
     }
+
+    @Test fun megaEvolutionPromosWithOrWithoutTheP() {
+        for (game in listOf(Game.POKEMON, null)) for (text in listOf("MEP 117", "MEP EN 117", "ME117", "ME 117", "Kyogre ME117")) {
+            val key = CardTextParser.parseTyped(text, game) as? PokemonPromoKey
+            assertEquals("$text / $game", "MEP", key?.prefix)
+            assertEquals("$text / $game", "117", key?.number)
+        }
+        assertEquals(listOf("Kyogre"), (CardTextParser.parseTyped("Kyogre ME117", null) as PokemonPromoKey).nameHints)
+        assertEquals("045", (CardTextParser.parseTyped("SWSH045", null) as PokemonPromoKey).number)
+        // Scanned: the promo code on the card's bottom line.
+        val scanned = best(frame("Kyogre", "HP 130", "Origin Pulse", "MEP EN 117"), Game.POKEMON) as PokemonPromoKey
+        assertEquals("MEP", scanned.prefix)
+        // Typed codes of other games still work.
+        assertTrue(CardTextParser.parseTyped("MKM 123", null) is MagicKey)
+        assertTrue(CardTextParser.parseTyped("PAL 123", Game.POKEMON) is PokemonKey)
+        // Main-set codes that start with ME aren't promos.
+        val main = best(frame("Kyogre", "HP 130", "MEG EN 034/132"), Game.POKEMON)
+        assertTrue(main !is PokemonPromoKey)
+    }
 }
