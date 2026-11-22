@@ -1,12 +1,30 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
-// Release signing: supply your own keystore through environment variables (or CI secrets).
-// Without them, the release APK is signed with the local debug key so it can still be sideloaded.
-val releaseKeystore: String? = System.getenv("SNAPSTACK_KEYSTORE")
+// Release signing (your Google Play upload key): put it in keystore.properties at the project root
+// (storeFile, storePassword, keyAlias, keyPassword; never commit it) or in SNAPSTACK_* environment
+// variables / CI secrets. Without a key, release APKs are signed with the local debug key so they can
+// still be sideloaded, but a Play bundle (bundleRelease) refuses to build.
+val keystoreProps = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+fun signingValue(prop: String, env: String): String? = keystoreProps.getProperty(prop) ?: System.getenv(env)
+val releaseKeystore: String? = signingValue("storeFile", "SNAPSTACK_KEYSTORE")
+
+// Play bundles: Play builds per-device APKs itself, and AGP can't bundle while ABI splits are on
+// (issuetracker.google.com/402800800). Play also rejects debug-signed bundles, so stop right away.
+val buildingBundle = gradle.startParameter.taskNames.any { it.substringAfterLast(':').startsWith("bundle") }
+if (buildingBundle && gradle.startParameter.taskNames.any { it.contains("Release") } && releaseKeystore == null) {
+    throw GradleException(
+        "bundleRelease needs your upload key: create keystore.properties (see docs/play-store/RELEASE.md) " +
+            "or set SNAPSTACK_KEYSTORE, SNAPSTACK_KEYSTORE_PASSWORD, SNAPSTACK_KEY_ALIAS and SNAPSTACK_KEY_PASSWORD."
+    )
+}
 
 android {
     namespace = "app.snapstack"
@@ -24,7 +42,7 @@ android {
     // universal one; 32-bit x86 (no real phones) is dropped entirely.
     splits {
         abi {
-            isEnable = true
+            isEnable = !buildingBundle
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64")
             isUniversalApk = true
@@ -34,10 +52,10 @@ android {
     signingConfigs {
         if (releaseKeystore != null) {
             create("release") {
-                storeFile = file(releaseKeystore)
-                storePassword = System.getenv("SNAPSTACK_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("SNAPSTACK_KEY_ALIAS")
-                keyPassword = System.getenv("SNAPSTACK_KEY_PASSWORD")
+                storeFile = rootProject.file(releaseKeystore)
+                storePassword = signingValue("storePassword", "SNAPSTACK_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "SNAPSTACK_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "SNAPSTACK_KEY_PASSWORD")
             }
         }
     }
@@ -47,6 +65,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Symbol tables for native crash stack traces in Play Console (ML Kit's prebuilt libraries
+            // ship stripped, so Play may still note that some symbols are missing).
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release")
             else signingConfigs.getByName("debug")
         }

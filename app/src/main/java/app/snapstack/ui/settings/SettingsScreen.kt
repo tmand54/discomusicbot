@@ -160,6 +160,7 @@ fun SettingsScreen() {
     val wifi by s.wifiOnly.flow.collectAsState()
     val pcKey by s.priceChartingKey.flow.collectAsState()
     var keyDialog by remember { mutableStateOf(false) }
+    var privacy by remember { mutableStateOf(false) }
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { vm.backup(it, context) }
@@ -250,9 +251,10 @@ fun SettingsScreen() {
         Action("Export CSV", "Spreadsheet of every copy with prices") { csvLauncher.launch("tcg-portfolio-collection-${LocalDate.now()}.csv") }
 
         Group("About")
+        Action("Privacy policy", "What stays on your phone and what is sent to look cards up") { privacy = true }
         Text(
-            "TCG Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no tracking. " +
-                "Card text is read on-device with ML Kit; only the card number is sent to look a card up.\n\n" +
+            "TCG Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no ads, no analytics. " +
+                "Card text is read on your phone with Google's ML Kit; only the card number or name is sent to look a card up.\n\n" +
                 "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
                 "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound, Dragon Ball). Backups when a source is down or has no price: " +
                 "the TCGplayer catalog (Pokémon, Magic, Yu-Gi-Oh!, Lorcana) and optcgapi.com (One Piece search and prices). " +
@@ -272,7 +274,45 @@ fun SettingsScreen() {
     }
 
     if (offline) OfflineSheet(vm, onDismiss = { offline = false; vm.loadCounts() })
+    if (privacy) PrivacyDialog(onDismiss = { privacy = false })
     if (keyDialog) PriceChartingKeyDialog(pcKey, onDismiss = { keyDialog = false }) { s.priceChartingKey.value = it.trim(); keyDialog = false }
+}
+
+/** The same policy as docs/privacy-policy.md, readable offline. */
+@Composable
+private fun PrivacyDialog(onDismiss: () -> Unit) {
+    val sections = listOf(
+        "What stays on your phone" to "Your collection (cards, prices paid, grading, notes, wantlist, alerts and value history) is stored " +
+            "only in the app's private storage. Camera frames are read on your phone and never saved or uploaded. The app has " +
+            "no accounts, ads or analytics of its own and doesn't ask for your name, email, location or contacts.",
+        "What is sent, and why" to "To identify cards and show prices, the app sends the card number, set code, name or search text " +
+            "to TCGdex, Scryfall, YGOPRODeck, Lorcast, tcgcsv.com and optcgapi.com, and loads card images from their image hosts " +
+            "and onepiece-cardgame.com. If you add a PriceCharting key, the key and the card's name and number go to PriceCharting. " +
+            "These services can see your IP address and the app's name and version, but never your collection.",
+        "Google ML Kit" to "ML Kit, the on-device text reader, sends device information (manufacturer, model, OS version), " +
+            "app information and performance metrics to Google for diagnostics and usage analytics, encrypted in transit. " +
+            "Card images and the text read from them stay on your phone.",
+        "Backups" to "If Android backup is on, Android can include the app's data in your backup in your own Google account. " +
+            "Backup and CSV files you make are saved where you choose and never uploaded by the app.",
+        "Permissions" to "Camera: to scan cards. Notifications: optional, for your price alerts. Internet: to look up cards and prices.",
+        "Children" to "The app isn't directed at children under 13.",
+        "Deleting your data" to "Uninstall the app or clear its storage in Android settings to delete everything it stored.",
+        "Contact" to "Use the developer email on TCG Portfolio's Google Play page.",
+    )
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Privacy policy") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Effective November 22, 2026", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                sections.forEach { (title, body) ->
+                    Text(title, style = MaterialTheme.typography.titleSmall)
+                    Text(body, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 @Composable

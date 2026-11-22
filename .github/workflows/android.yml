@@ -48,6 +48,21 @@ jobs:
           name: tcg-portfolio-apks
           path: app/build/outputs/apk/release/*.apk
 
+      # Google Play bundle: only when the upload key is configured (see docs/play-store/RELEASE.md).
+      - name: Build Play bundle
+        if: env.SNAPSTACK_KEYSTORE != ''
+        env:
+          SNAPSTACK_KEYSTORE_PASSWORD: ${{ secrets.SNAPSTACK_KEYSTORE_PASSWORD }}
+          SNAPSTACK_KEY_ALIAS: ${{ secrets.SNAPSTACK_KEY_ALIAS }}
+          SNAPSTACK_KEY_PASSWORD: ${{ secrets.SNAPSTACK_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon bundleRelease
+
+      - uses: actions/upload-artifact@v4
+        if: env.SNAPSTACK_KEYSTORE != ''
+        with:
+          name: tcg-portfolio-aab
+          path: app/build/outputs/bundle/release/*.aab
+
       - name: Publish release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

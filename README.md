@@ -206,13 +206,29 @@ You need JDK 17+ and the Android SDK (platform 36).
 ./gradlew testDebugUnitTest          # parser / voting / matching tests
 LIVE_API=1 ./gradlew testDebugUnitTest --tests '*LiveSourcesTest'   # hits the real APIs
 ./gradlew assembleRelease            # APKs in app/build/outputs/apk/release/
+./gradlew bundleRelease              # Google Play bundle (needs your upload key)
 ```
 
-Without a keystore, release builds are signed with the local debug key. To sign with your own
-key, set `SNAPSTACK_KEYSTORE`, `SNAPSTACK_KEYSTORE_PASSWORD`, `SNAPSTACK_KEY_ALIAS` and
-`SNAPSTACK_KEY_PASSWORD`. In CI, the same values go in repository secrets, with the keystore
-base64-encoded as `SNAPSTACK_KEYSTORE_BASE64`. The GitHub Actions workflow builds APKs on
-every push and attaches them to a GitHub Release when you push a `v*` tag.
+Without a keystore, release APKs are signed with the local debug key. To sign with your own key,
+create `keystore.properties` in the project root (`storeFile`, `storePassword`, `keyAlias`,
+`keyPassword`) or set `SNAPSTACK_KEYSTORE`, `SNAPSTACK_KEYSTORE_PASSWORD`, `SNAPSTACK_KEY_ALIAS`
+and `SNAPSTACK_KEY_PASSWORD`. `bundleRelease` refuses to run without a key, because Play rejects
+debug-signed bundles. In CI, the same values go in repository secrets, with the keystore
+base64-encoded as `SNAPSTACK_KEYSTORE_BASE64`. The GitHub Actions workflow builds APKs on every
+push (plus the Play bundle when the key secrets are set) and attaches the APKs to a GitHub Release
+when you push a `v*` tag.
+
+## Publishing on Google Play
+
+Everything for the Play Store is in [`docs/play-store/`](docs/play-store/):
+
+* [`RELEASE.md`](docs/play-store/RELEASE.md): step by step, from creating your upload key to production.
+* [`listing.md`](docs/play-store/listing.md): store listing text, screenshots to take, release notes.
+* [`policy-answers.md`](docs/play-store/policy-answers.md): Data safety, content rating, target audience
+  and other App content answers.
+* [`graphics/`](docs/play-store/graphics/): 512×512 icon and 1024×500 feature graphic.
+* [`docs/privacy-policy.html`](docs/privacy-policy.html): privacy policy to host (also in the app
+  under Settings → About).
 
 ### Project layout
 
