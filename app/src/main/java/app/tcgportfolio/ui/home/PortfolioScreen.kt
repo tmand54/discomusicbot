@@ -1,5 +1,16 @@
 package app.tcgportfolio.ui.home
 
+import kotlin.math.abs
+import app.tcgportfolio.ui.theme.LocalMarketColors
+import app.tcgportfolio.data.ValuePoint
+import app.tcgportfolio.data.PortfolioMath
+import app.tcgportfolio.data.ChartRange
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -84,6 +95,7 @@ data class PortfolioState(
     val loaded: Boolean = false,
     val summary: PortfolioSummary? = null,
     val history: List<PortfolioPoint> = emptyList(),
+    val ticks: List<ValuePoint> = emptyList(),
     val top: List<OwnedCard> = emptyList(),
     val movers: List<Mover> = emptyList(),
     val rips: List<RipSession> = emptyList(),
@@ -95,15 +107,18 @@ class PortfolioViewModel : ViewModel() {
     val refreshing = MutableStateFlow<Pair<Int, Int>?>(null)
     val lastRefresh = MutableStateFlow(graph.settings.lastPriceRefresh)
 
+    private val series = combine(graph.collection.portfolioHistory, graph.collection.portfolioTicks) { d, t -> d to t }
+
     val state = combine(
-        graph.collection.owned, graph.collection.portfolioHistory, graph.collection.rips, graph.collection.alerts,
+        graph.collection.owned, series, graph.collection.rips, graph.collection.alerts,
         graph.settings.conditionAdjusted.flow,
-    ) { owned, history, rips, alerts, adjust ->
+    ) { owned, (history, ticks), rips, alerts, adjust ->
         val byCard = owned.groupBy { it.card.id }.values.map { copies -> copies.maxBy { it.unitValue(adjust) } }
         PortfolioState(
             loaded = true,
             summary = graph.collection.summarize(owned),
             history = history,
+            ticks = ticks,
             top = byCard.sortedByDescending { it.unitValue(adjust) }.take(12),
             movers = owned.mapNotNull { o ->
                 val then = o.item.priceAtAdd ?: return@mapNotNull null
@@ -130,7 +145,6 @@ class PortfolioViewModel : ViewModel() {
     fun deleteAlert(id: Long) = viewModelScope.launch { graph.collection.deleteAlert(id) }
 }
 
-private enum class Range(val label: String, val days: Long?) { M1("1M", 30), M3("3M", 90), Y1("1Y", 365), ALL("All", null) }
 
 @Composable
 fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
@@ -139,7 +153,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
     val refreshing by vm.refreshing.collectAsState()
     val lastRefresh by vm.lastRefresh.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var range by remember { mutableStateOf(Range.M3) }
+    var range by rememberSaveable { mutableStateOf(ChartRange.M1) }
     val importSheet = app.tcgportfolio.ui.importer.rememberImportSheet()
 
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -189,39 +203,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             ) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("Collection value", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(money(s.value), style = MaterialTheme.typography.displaySmall)
-                    if (s.pricedCopies > 0) {
-                        val basis = s.costBasis
-                        Text(
-                            "${signedMoney(s.pnl)}" + (if (basis > 0) "  (${pct(s.pnl / basis * 100)})" else "") + " vs. what you paid",
-                            style = MaterialTheme.typography.titleSmall.merge(Numeric), color = gainColor(s.pnl),
-                        )
-                        if (s.pricedCopies < s.copies) Text(
-                            "P&L covers ${s.pricedCopies} of ${s.copies} cards with a purchase price",
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Text(
-                            "Add purchase prices (or a pack cost when you rip) to track profit & loss",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    val pts = state.history.filter { p -> range.days == null || p.day >= LocalDate.now().toEpochDay() - range.days!! }
-                    if (pts.size >= 2) {
-                        LineChart(pts.map { it.value }, Modifier.fillMaxWidth().height(120.dp))
-                        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Range.entries.forEach { r -> FilterChip(selected = range == r, onClick = { range = r }, label = { Text(r.label) }) }
-                        }
-                    } else {
-                        Text(
-                            "Your value chart builds up day by day as prices refresh.",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                PerformanceCard(s, state, range) { range = it }
             }
         }
         item {
@@ -291,5 +273,131 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/**
+ * The collection's value, its change over the chosen interval (gains only: cards added or removed
+ * don't count), the chart, and ROI / invested / profit for the whole collection.
+ */
+@Composable
+private fun PerformanceCard(s: PortfolioSummary, state: PortfolioState, range: ChartRange, onRange: (ChartRange) -> Unit) {
+    val now = remember(state.history, state.ticks, s) { System.currentTimeMillis() }
+    val series = remember(state.history, state.ticks, now) { PortfolioMath.merge(state.history, state.ticks, now) }
+    val live = ValuePoint(now, s.value, s.basis)
+    val stats = remember(series, range, live) { PortfolioMath.stats(series, range, now, live) }
+    var scrub by remember(range) { mutableStateOf<ValuePoint?>(null) }
+    val market = LocalMarketColors.current
+
+    Column(Modifier.padding(18.dp)) {
+        Text("Collection value", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(money(scrub?.value ?: s.value), style = MaterialTheme.typography.displaySmall)
+        val sc = scrub
+        if (sc != null && stats != null) {
+            // While scrubbing: the change from the start of the interval to that point.
+            val upTo = PortfolioMath.stats(stats.points.filter { it.t <= sc.t }, ChartRange.ALL, sc.t, null)
+            Text(
+                listOfNotNull(upTo?.let { changeText(it.gain, it.returnPct) }, pointTime(sc.t, range)).joinToString("  ·  "),
+                style = MaterialTheme.typography.titleSmall.merge(Numeric), color = gainColor(upTo?.gain ?: 0.0),
+            )
+        } else if (stats != null) {
+            Text(
+                changeText(stats.gain, stats.returnPct) + "  " + if (stats.partial) "since you started" else range.caption,
+                style = MaterialTheme.typography.titleSmall.merge(Numeric), color = gainColor(stats.gain),
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+        if (stats != null && stats.points.size >= 2) {
+            val up = stats.gain >= 0
+            ValueChart(
+                stats.points, stats.start, now,
+                lineColor = if (abs(stats.gain) < 0.005) MaterialTheme.colorScheme.primary else if (up) market.gain else market.loss,
+                basisColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth().height(150.dp),
+                showBasis = s.basis > 0.005,
+                onScrub = { scrub = it },
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Text(pointTime(stats.start, range), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                if (s.basis > 0.005) Text("- - Invested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Text("Now", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            Text(
+                "The chart builds up as you add cards and prices refresh.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 24.dp),
+            )
+        }
+        RangeSelector(range, onRange, Modifier.padding(top = 10.dp))
+
+        if (stats != null && abs(stats.flows) >= 0.01) Text(
+            (if (stats.flows > 0) "Cards added" else "Cards removed") + " in this period: ${money(abs(stats.flows))} (not counted as gain or loss)",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        HorizontalDivider(Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        Row(Modifier.fillMaxWidth()) {
+            Metric("ROI", s.roi?.let { pct(it) } ?: "—", s.roi?.let { gainColor(it) }, Modifier.weight(1f))
+            Metric("Invested", money(s.basis), null, Modifier.weight(1f))
+            Metric("Profit", signedMoney(s.profit), gainColor(s.profit), Modifier.weight(1f))
+        }
+        if (s.estimatedCopies > 0) Text(
+            if (s.estimatedCopies == s.copies) "No purchase prices entered: ROI uses each card's price when you added it."
+            else "${s.estimatedCopies} of ${s.copies} cards have no purchase price; their price when added is used.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun Metric(label: String, value: String, color: Color?, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value, style = MaterialTheme.typography.titleMedium.merge(Numeric),
+            color = color ?: MaterialTheme.colorScheme.onSurface, maxLines = 1,
+        )
+    }
+}
+
+/** 1D · 5D · 1M · 6M · 1Y · All, sharing the width evenly. */
+@Composable
+private fun RangeSelector(selected: ChartRange, onSelect: (ChartRange) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        ChartRange.entries.forEach { r ->
+            val on = r == selected
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                    .clickable { onSelect(r) }
+                    .padding(vertical = 7.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    r.label, style = MaterialTheme.typography.labelLarge,
+                    color = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun changeText(gain: Double, returnPct: Double?): String =
+    signedMoney(gain) + (returnPct?.let { " (${pct(it)})" } ?: "")
+
+/** Time of day for the short intervals, the date for the long ones. */
+private fun pointTime(t: Long, range: ChartRange): String {
+    val date = Date(t)
+    return when (range) {
+        ChartRange.D1 -> DateFormat.getTimeInstance(DateFormat.SHORT).format(date)
+        ChartRange.D5 -> java.text.SimpleDateFormat("EEE h:mm a", java.util.Locale.getDefault()).format(date)
+        else -> DateFormat.getDateInstance(DateFormat.MEDIUM).format(date)
     }
 }

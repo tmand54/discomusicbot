@@ -29,7 +29,15 @@ data class PortfolioSummary(
     val copies: Int,
     val distinct: Int,
     val byGame: Map<Game, Double>,
-)
+    /** What the collection cost: the price paid for each copy, or its market price when added. */
+    val basis: Double = 0.0,
+    /** Copies whose basis is their price when added, because no price paid was entered. */
+    val estimatedCopies: Int = 0,
+) {
+    /** Return on investment over the whole collection, in %; null when nothing has a basis. */
+    val roi: Double? get() = if (basis > 0.005) (value - basis) / basis * 100 else null
+    val profit: Double get() = value - basis
+}
 
 data class FiredAlert(val alert: PriceAlert, val card: Card, val price: Double)
 
@@ -41,6 +49,7 @@ class CollectionRepository(
     val owned: Flow<List<OwnedCard>> = db.observe(Topic.COLLECTION, Topic.CARDS) { db.ownedCards() }
     val wantlist: Flow<List<Card>> = db.observe(Topic.WANTLIST, Topic.CARDS) { db.wantlist() }
     val portfolioHistory: Flow<List<PortfolioPoint>> = db.observe(Topic.HISTORY) { db.portfolioHistory() }
+    val portfolioTicks: Flow<List<ValuePoint>> = db.observe(Topic.HISTORY) { db.portfolioTicks() }
     val rips: Flow<List<RipSession>> = db.observe(Topic.RIPS) { db.rips() }
     val alerts: Flow<List<Pair<PriceAlert, Card?>>> =
         db.observe(Topic.ALERTS, Topic.CARDS) { db.alerts().map { it to db.getCard(it.cardId) } }
@@ -85,6 +94,7 @@ class CollectionRepository(
     fun summarize(owned: List<OwnedCard>): PortfolioSummary {
         val adjust = settings.conditionAdjusted.value
         var value = 0.0; var cost = 0.0; var pnl = 0.0; var priced = 0; var copies = 0
+        var basis = 0.0; var estimated = 0
         val byGame = HashMap<Game, Double>()
         for (o in owned) {
             val v = o.totalValue(adjust)
@@ -92,13 +102,16 @@ class CollectionRepository(
             copies += o.item.qty
             byGame[o.card.game] = (byGame[o.card.game] ?: 0.0) + v
             o.totalCost?.let { c -> cost += c; pnl += v - c; priced += o.item.qty }
+            basis += (o.item.costEach ?: o.item.priceAtAdd ?: 0.0) * o.item.qty
+            if (o.item.costEach == null) estimated += o.item.qty
         }
-        return PortfolioSummary(value, cost, pnl, priced, copies, owned.map { it.card.id }.toSet().size, byGame)
+        return PortfolioSummary(value, cost, pnl, priced, copies, owned.map { it.card.id }.toSet().size, byGame, basis, estimated)
     }
 
     private fun snapshotPortfolio() {
         val s = summarize(db.ownedCards())
-        db.recordPortfolio(PortfolioPoint(today(), s.value, s.costBasis, s.copies))
+        db.recordPortfolio(PortfolioPoint(today(), s.value, s.costBasis, s.copies, s.basis))
+        db.recordTick(System.currentTimeMillis(), s.value, s.basis, s.copies)
     }
 
     /** Refreshes every tracked card's price, records history and returns alerts that fired. */

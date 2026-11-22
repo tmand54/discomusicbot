@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.11.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.11.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.12.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.12.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
@@ -84,8 +84,12 @@ found ("Found in 12 ms · on device").
   number by hand.
 * **Rips:** give the session a name and the pack price to see your pull value against cost. A
   history of rips appears on the Portfolio tab.
-* **Portfolio:** total value, P&L against purchase prices, a value-over-time chart, a breakdown
-  by game, your most valuable cards, and changes since each card was added.
+* **Portfolio:** total value and a performance chart for **1D, 5D, 1M, 6M, 1Y and All**, with the
+  gain and % return for the interval, plus **ROI**, amount invested and profit for the whole collection.
+  Cards you add or remove aren't counted as gains or losses: each snapshot also records the invested
+  basis (price paid, or the market price when added) and the % return is a Modified Dietz return.
+  Press and drag on the chart to read any point. Also a breakdown by game, your most valuable cards,
+  and changes since each card was added.
 * **Collection:** search, sort and filter by game, plus set progress (owned / total, with the
   missing cards shown dimmed) and a wantlist. Hold a card to start selecting, tap more (or
   **Select all**), then **Delete** to remove them all at once, with Undo.

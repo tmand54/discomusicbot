@@ -131,7 +131,11 @@ data class RipSession(
 
 data class PricePoint(val day: Long, val price: Double)
 
-data class PortfolioPoint(val day: Long, val value: Double, val cost: Double, val count: Int)
+/**
+ * One day of collection history. [cost] is the purchase cost of copies with a price paid; [basis] is the
+ * invested basis of every copy (price paid, or the market price when added), null in very old rows.
+ */
+data class PortfolioPoint(val day: Long, val value: Double, val cost: Double, val count: Int, val basis: Double? = null)
 
 data class PriceAlert(
     val id: Long = 0,

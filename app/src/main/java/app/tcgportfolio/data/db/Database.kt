@@ -79,8 +79,9 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
         )
         db.execSQL(
             """CREATE TABLE portfolio_history(day INTEGER PRIMARY KEY, value REAL NOT NULL, cost REAL NOT NULL,
-                count INTEGER NOT NULL)"""
+                count INTEGER NOT NULL, basis REAL)"""
         )
+        createTicks(db)
         db.execSQL(
             """CREATE TABLE alerts(id INTEGER PRIMARY KEY AUTOINCREMENT, card_id TEXT NOT NULL, variant TEXT,
                 above INTEGER NOT NULL, target REAL NOT NULL, active INTEGER NOT NULL, last_fired INTEGER NOT NULL DEFAULT 0)"""
@@ -93,6 +94,34 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE collection ADD COLUMN lang TEXT")
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE portfolio_history ADD COLUMN basis REAL")
+            createTicks(db)
+            backfillBasis(db)
+        }
+    }
+
+    /** Timestamped snapshots of the collection's value for the 1D / 5D charts (kept for about a week). */
+    private fun createTicks(db: SQLiteDatabase) = db.execSQL(
+        "CREATE TABLE IF NOT EXISTS portfolio_ticks(ts INTEGER PRIMARY KEY, value REAL NOT NULL, basis REAL NOT NULL, count INTEGER NOT NULL)"
+    )
+
+    /**
+     * Fills in the invested basis of history rows that don't have one (from before it was recorded, or
+     * restored from an older backup), from the copies owned at the end of each day.
+     */
+    private fun backfillBasis(db: SQLiteDatabase) {
+        val days = db.rawQuery("SELECT day FROM portfolio_history WHERE basis IS NULL", null)
+            .use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+        val zone = java.time.ZoneId.systemDefault()
+        for (day in days) {
+            val endMs = java.time.LocalDate.ofEpochDay(day + 1).atStartOfDay(zone).toInstant().toEpochMilli()
+            db.execSQL(
+                """UPDATE portfolio_history SET basis = (SELECT COALESCE(SUM(COALESCE(cost, price_at_add, 0) * qty), 0)
+                   FROM collection WHERE added_at < ?) WHERE day = ?""",
+                arrayOf<Any>(endMs, day),
+            )
+        }
     }
 
     // ---------------------------------------------------------------- cards
@@ -280,7 +309,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
      * wantlist and price alerts when [includeWantlistAndAlerts]. Downloaded card data and settings stay.
      */
     fun wipeCollection(includeWantlistAndAlerts: Boolean) {
-        val tables = listOf("collection", "rips", "portfolio_history") +
+        val tables = listOf("collection", "rips", "portfolio_history", "portfolio_ticks") +
             if (includeWantlistAndAlerts) listOf("wantlist", "alerts") else emptyList()
         val db = writableDatabase
         db.beginTransaction()
@@ -428,14 +457,42 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
     fun recordPortfolio(point: PortfolioPoint) {
         val cv = ContentValues().apply {
             put("day", point.day); put("value", point.value); put("cost", point.cost); put("count", point.count)
+            put("basis", point.basis)
         }
         writableDatabase.insertWithOnConflict("portfolio_history", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         notify(Topic.HISTORY)
     }
 
+    /**
+     * Records a timestamped snapshot. Snapshots less than a minute apart (a bulk add, a price refresh
+     * in progress) collapse into one, and those older than [TICK_DAYS] days are dropped.
+     */
+    fun recordTick(ts: Long, value: Double, basis: Double, count: Int) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("portfolio_ticks", "ts > ?", arrayOf((ts - 60_000L).toString()))
+            db.delete("portfolio_ticks", "ts < ?", arrayOf((ts - TICK_DAYS * 86_400_000L).toString()))
+            val cv = ContentValues().apply { put("ts", ts); put("value", value); put("basis", basis); put("count", count) }
+            db.insertWithOnConflict("portfolio_ticks", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notify(Topic.HISTORY)
+    }
+
+    fun portfolioTicks(): List<app.tcgportfolio.data.ValuePoint> =
+        readableDatabase.rawQuery("SELECT ts, value, basis FROM portfolio_ticks ORDER BY ts", null)
+            .use { c -> buildList { while (c.moveToNext()) add(app.tcgportfolio.data.ValuePoint(c.getLong(0), c.getDouble(1), c.getDouble(2))) } }
+
     fun portfolioHistory(): List<PortfolioPoint> =
-        readableDatabase.rawQuery("SELECT day, value, cost, count FROM portfolio_history ORDER BY day", null)
-            .use { c -> buildList { while (c.moveToNext()) add(PortfolioPoint(c.getLong(0), c.getDouble(1), c.getDouble(2), c.getInt(3))) } }
+        readableDatabase.rawQuery("SELECT day, value, cost, count, basis FROM portfolio_history ORDER BY day", null)
+            .use { c ->
+                buildList {
+                    while (c.moveToNext()) add(PortfolioPoint(c.getLong(0), c.getDouble(1), c.getDouble(2), c.getInt(3), if (c.isNull(4)) null else c.getDouble(4)))
+                }
+            }
 
     // ---------------------------------------------------------------- alerts
 
@@ -525,7 +582,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
         })
         root.put("portfolio", JSONArray().apply {
             portfolioHistory().forEach { p ->
-                put(JSONObject().put("day", p.day).put("value", p.value).put("cost", p.cost).put("count", p.count))
+                put(JSONObject().put("day", p.day).put("value", p.value).put("cost", p.cost).put("count", p.count).put("basis", p.basis))
             }
         })
         return root
@@ -538,7 +595,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
         var restored = 0
         db.beginTransaction()
         try {
-            listOf("collection", "wantlist", "alerts", "rips", "portfolio_history").forEach { db.delete(it, null, null) }
+            listOf("collection", "wantlist", "alerts", "rips", "portfolio_history", "portfolio_ticks").forEach { db.delete(it, null, null) }
             root.optJSONArray("cards")?.let { arr ->
                 for (i in 0 until arr.length()) {
                     val card = cardFromJson(arr.getJSONObject(i)) ?: continue
@@ -589,10 +646,12 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
                     val cv = ContentValues().apply {
                         put("day", o.getLong("day")); put("value", o.optDouble("value")); put("cost", o.optDouble("cost"))
                         put("count", o.optInt("count"))
+                        if (o.has("basis") && !o.isNull("basis")) put("basis", o.optDouble("basis"))
                     }
                     db.insertWithOnConflict("portfolio_history", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
                 }
             }
+            backfillBasis(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -603,7 +662,8 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
 
     companion object {
         const val NAME = "snapstack.db"
-        const val VERSION = 2
+        const val VERSION = 3
+        const val TICK_DAYS = 10L
     }
 }
 
