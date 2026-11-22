@@ -15,6 +15,7 @@ import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.data.source.TcgPlayerFallback
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.Game
+import app.snapstack.scan.ArtMatcher
 import app.snapstack.scan.ScanSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +48,8 @@ class AppGraph(val app: Application) {
         )
     }
     val collection: CollectionRepository by lazy { CollectionRepository(db, cards, settings) }
-    val session: ScanSession by lazy { ScanSession(cards, appScope) }
+    val artMatcher: ArtMatcher by lazy { ArtMatcher(app) }
+    val session: ScanSession by lazy { ScanSession(cards, appScope, artMatcher) }
     val importer: CollectionImporter by lazy { CollectionImporter(app, db, cards, collection, appScope) }
 
     companion object {

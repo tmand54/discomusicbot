@@ -134,7 +134,7 @@ fun OcrFrame.offsetBy(dx: Int, dy: Int, fullWidth: Int, fullHeight: Int): OcrFra
     val fx = dx.toFloat(); val fy = dy.toFloat()
     return OcrFrame(
         lines.map { it.copy(box = Box(it.box.left + fx, it.box.top + fy, it.box.right + fx, it.box.bottom + fy)) },
-        fullWidth, fullHeight, tookMs,
+        fullWidth, fullHeight, tookMs, thumb,
     )
 }
 

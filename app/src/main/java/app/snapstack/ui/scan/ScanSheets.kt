@@ -103,6 +103,13 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
                             card.rarity?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             Spacer(Modifier.height(8.dp))
                             Text(money(item.unitPrice), style = MaterialTheme.typography.headlineSmall.merge(Numeric), fontWeight = FontWeight.Bold)
+                            item.artScore?.let { score ->
+                                Text(
+                                    (if (item.artPicked) "Printing picked by artwork" else "Artwork compared") +
+                                        " · ${(score.coerceIn(0f, 1f) * 100).toInt()}% look-alike",
+                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary,
+                                )
+                            }
                             item.resolveMs?.let {
                                 Text(
                                     "Found in $it ms" + (item.from?.let { f -> " · " + f.name.lowercase().replace("device", "on device") } ?: ""),

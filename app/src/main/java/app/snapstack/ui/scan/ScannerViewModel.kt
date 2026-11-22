@@ -93,6 +93,9 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             Guide.inFrame(viewW, viewH, w, h, binder, if (binder) 0.04f else 0.08f)
         },
         onBlur = ::onBlur,
+        cardProvider = { w, h ->
+            if (_ui.value.mode == ScanMode.BINDER) null else Guide.inFrame(viewW, viewH, w, h, false, 0f)
+        },
         onFrame = ::onFrame,
     )
     private var lastFrameAt = 0L
@@ -204,17 +207,17 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             else -> votes
         }
         val commitId = voter.offer(pick?.key?.id, now, required) ?: return
-        if (pick != null && pick.key.id == commitId) commit(pick.key, hints)
+        if (pick != null && pick.key.id == commitId) commit(pick.key, hints, frame.thumb)
     }
 
-    private fun commit(scanned: ScanKey, hints: List<String> = emptyList()) {
+    private fun commit(scanned: ScanKey, hints: List<String> = emptyList(), thumb: app.snapstack.scan.CardThumb? = null) {
         val key = if (scanned is app.snapstack.scan.OnePieceDonKey && scanned.setHint == null) {
             // DON!! cards don't say which set they're from: assume the pack/deck being scanned.
             scanned.copy(setHint = session.items.value.firstOrNull { it.card?.game == Game.ONE_PIECE && it.card.number != "DON!!" }?.card?.setCode)
         } else scanned
         lastCommittedId = key.id
         feedback()
-        val uid = session.add(key, hints)
+        val uid = session.add(key, hints, thumb)
         _ui.update { it.copy(flash = SystemClock.elapsedRealtime(), message = null) }
         if (_ui.value.mode == ScanMode.SINGLE) {
             analyzer.paused = true
@@ -289,8 +292,17 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 viewModelScope.launch {
                     val frame = runCatching { TextAnalyzer.recognize(bitmap, rotation) }.getOrNull()
+                    val thumb = frame?.let { f ->
+                        Guide.inFrame(viewW, viewH, f.width, f.height, false, 0f)?.let { guide ->
+                            runCatching {
+                                app.snapstack.scan.ArtMatcher.thumbFromBitmap(
+                                    bitmap, rotation, app.snapstack.scan.ArtMatcher.captureArea(guide, f.width, f.height),
+                                )
+                            }.getOrNull()
+                        }
+                    }
                     bitmap.recycle()
-                    handleStill(frame)
+                    handleStill(frame?.copy(thumb = thumb))
                 }
             }
 
@@ -330,7 +342,7 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         voter.markCommitted(best.key.id, SystemClock.elapsedRealtime())
-        commit(best.key, frame.lines.map { it.text })
+        commit(best.key, frame.lines.map { it.text }, frame.thumb)
     }
 
     fun saveSession(onDone: (Int) -> Unit) {

@@ -25,6 +25,8 @@ class TextAnalyzer(
     /** The guide in upright frame coordinates for a frame of (width, height), or null for the whole frame. */
     private val roiProvider: (Int, Int) -> Box? = { _, _ -> null },
     private val onBlur: (Boolean) -> Unit = {},
+    /** The exact card guide (upright coordinates), for the artwork thumbnail; null to skip it. */
+    private val cardProvider: (Int, Int) -> Box? = { _, _ -> null },
     private val onFrame: (OcrFrame) -> Unit,
 ) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -59,6 +61,17 @@ class TextAnalyzer(
                 imageProxy.close(); return
             }
 
+            // A tiny colour picture of the card for artwork matching (well under a millisecond).
+            val thumb = cardProvider(uw, uh)?.let { guide ->
+                runCatching {
+                    val uPlane = imageProxy.planes[1]; val vPlane = imageProxy.planes[2]
+                    CardThumb.fromYuv(
+                        yBuf, rowStride, uPlane.buffer, vPlane.buffer, uPlane.rowStride, uPlane.pixelStride,
+                        sw, sh, rotation, ArtMatcher.captureArea(guide, uw, uh),
+                    )
+                }.getOrNull()
+            }
+
             val nv21 = cropper.crop(yBuf, rowStride, crop)
             val upright = RoiMapper.sensorToUpright(crop, sw, sh, rotation)
             val start = SystemClock.elapsedRealtime()
@@ -67,7 +80,7 @@ class TextAnalyzer(
                 .addOnSuccessListener(callbackExecutor) { text ->
                     if (!paused) {
                         val local = text.toFrame(upright.width, upright.height, SystemClock.elapsedRealtime() - start)
-                        onFrame(local.offsetBy(upright.left, upright.top, uw, uh))
+                        onFrame(local.copy(thumb = thumb).offsetBy(upright.left, upright.top, uw, uh))
                     }
                 }
                 .addOnCompleteListener(callbackExecutor) { imageProxy.close() }

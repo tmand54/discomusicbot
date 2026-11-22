@@ -31,6 +31,10 @@ data class SessionItem(
     val from: ResolvedFrom? = null,
     val resolveMs: Long? = null,
     val error: String? = null,
+    /** How closely the camera picture matches the chosen printing's artwork (0..1), when compared. */
+    val artScore: Float? = null,
+    /** The printing was chosen by artwork among cards that share its number. */
+    val artPicked: Boolean = false,
 ) {
     val unitPrice: Double? get() = card?.price(variant)
     val total: Double get() = (unitPrice ?: 0.0) * qty
@@ -43,7 +47,11 @@ data class SessionItem(
  * The scan "cart": everything scanned since the last save. Lookups run concurrently in the
  * background, so the camera keeps reading cards while earlier ones are still resolving.
  */
-class ScanSession(private val repo: CardRepository, private val scope: CoroutineScope) {
+class ScanSession(
+    private val repo: CardRepository,
+    private val scope: CoroutineScope,
+    private val artMatcher: ArtMatcher? = null,
+) {
     private val ids = AtomicLong(1)
     private val aliases = java.util.concurrent.ConcurrentHashMap<Long, Long>()
     private val _items = MutableStateFlow<List<SessionItem>>(emptyList())
@@ -59,7 +67,7 @@ class ScanSession(private val repo: CardRepository, private val scope: Coroutine
         private set
 
     /** [hints]: the text OCR saw on the card, used to catch misreads (see [CardRepository.resolve]). */
-    fun add(key: ScanKey, hints: List<String> = emptyList()): Long {
+    fun add(key: ScanKey, hints: List<String> = emptyList(), thumb: CardThumb? = null): Long {
         val uid = ids.getAndIncrement()
         val now = System.currentTimeMillis()
         if (_items.value.isEmpty()) startedAt = now
@@ -71,23 +79,55 @@ class ScanSession(private val repo: CardRepository, private val scope: Coroutine
                 update(uid) { copy(status = if (r.error != null) ItemStatus.ERROR else ItemStatus.NOT_FOUND, error = r.error) }
                 return@launch
             }
+            // Flag for review when a good read of the card doesn't show this card's name anywhere.
+            val nameOk = !(key !is OnePieceDonKey && hints.size >= 3 && TextMatch.cardNameScore(card.name, hints) < 0.35)
             update(uid) {
                 copy(
                     status = ItemStatus.READY, card = card, alternatives = r.alternatives,
-                    // Flag for review when a good read of the card doesn't show this card's name anywhere.
-                    confident = r.confident && !(key !is OnePieceDonKey && hints.size >= 3 &&
-                        TextMatch.cardNameScore(card.name, hints) < 0.35),
+                    confident = r.confident && nameOk,
                     variant = pickVariant(card), from = r.from, resolveMs = System.currentTimeMillis() - scannedAt,
                 )
             }
+            // Several printings share this number (parallel, alt art, promo, DON!!): let the artwork decide.
+            if (thumb != null && r.alternatives.isNotEmpty()) {
+                matchArt(uid, card, r.alternatives, thumb, don = key is OnePieceDonKey, nameOk = nameOk, fallback = r.confident)
+            }
             // Each DON!! card is picked by hand, so don't fold several DON!! scans into one row.
             if (key !is OnePieceDonKey && mergeDuplicate(uid)) return@launch
-            val priced = repo.ensurePriced(card)
-            if (priced !== card) update(uid) {
-                copy(card = priced, variant = if (variantChosen) variant else pickVariant(priced))
+            val current = _items.value.firstOrNull { it.uid == uid }?.card ?: card
+            val priced = repo.ensurePriced(current)
+            if (priced !== current) update(uid) {
+                if (this.card?.id != priced.id) this
+                else copy(card = priced, variant = if (variantChosen) variant else pickVariant(priced))
             }
         }
         return uid
+    }
+
+    private suspend fun matchArt(
+        uid: Long, original: Card, alternatives: List<Card>, thumb: CardThumb,
+        don: Boolean, nameOk: Boolean, fallback: Boolean,
+    ) {
+        val matcher = artMatcher ?: return
+        val pool = (listOf(original) + alternatives).take(48)
+        val ranked = runCatching { matcher.rank(thumb, pool) }.getOrDefault(emptyList())
+        if (ranked.isEmpty()) return
+        val decisive = ArtMatch.decisive(ranked)
+        // DON!! cards differ only in art, so ask for a clearer win before trusting the pick outright.
+        val strong = ArtMatch.decisive(ranked, minScore = 0.55f, minGap = 0.1f)
+        update(uid) {
+            if (card?.id != original.id) return@update this // the user already picked one
+            val chosen = if (decisive) ranked.first().first else original
+            val byLook = ranked.map { it.first } + alternatives.filter { a -> ranked.none { it.first.id == a.id } }
+            copy(
+                card = chosen,
+                alternatives = byLook.filter { it.id != chosen.id },
+                confident = nameOk && (if (decisive) (!don || strong) else fallback),
+                variant = if (chosen.id != original.id) pickVariant(chosen) else variant,
+                artScore = ranked.firstOrNull { it.first.id == chosen.id }?.second,
+                artPicked = decisive,
+            )
+        }
     }
 
     /** Adds an already-known card (from search, alternatives, or the single-card sheet). */
@@ -136,7 +176,7 @@ class ScanSession(private val repo: CardRepository, private val scope: Coroutine
     fun chooseAlternative(uid: Long, card: Card) {
         update(uid) {
             copy(card = card, alternatives = (alternatives + (this.card?.let { listOf(it) } ?: emptyList())).filter { it.id != card.id },
-                confident = true, variant = pickVariant(card), variantChosen = false)
+                confident = true, variant = pickVariant(card), variantChosen = false, artPicked = false, artScore = null)
         }
         scope.launch {
             val priced = repo.ensurePriced(card)

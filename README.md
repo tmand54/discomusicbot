@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.5.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.5.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.6.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.6.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 The app used to be called SnapStack. Its internal app id (`app.snapstack`) hasn't changed, so
@@ -47,6 +47,11 @@ Scanning is built to keep cards moving, without a pause between them:
 * **One-digit misreads are corrected.** If "128" is read but the name printed on the card is #123 in
   that set, #123 is used. Corrected reads are never cached under the misread number.
 * **Set lists load when the scanner opens,** so the first card doesn't wait for them.
+* **Artwork picks the printing.** When several printings share a number (One Piece / Dragon Ball /
+  Riftbound parallels and alt arts, DON!! cards, Pokémon cards with the same number in different
+  sets), the scanner compares a tiny colour picture of the card in view with each candidate's catalog
+  image. If one clearly wins, it's chosen automatically; otherwise the picker lists them by
+  look-alike. Only those few thumbnails are fetched, and they're cached.
 * **Frame voting instead of a confirm tap.** A card is committed once its number reads the same
   in 1–3 frames (Turbo / Balanced / Careful). A card held in view is never counted twice. Take
   it away and show it again to count another copy.

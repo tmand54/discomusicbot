@@ -16,8 +16,11 @@ data class Box(val left: Float, val top: Float, val right: Float, val bottom: Fl
 
 data class OcrLine(val text: String, val box: Box, val block: Int = 0)
 
-/** OCR output for one camera frame, in upright image coordinates. */
-data class OcrFrame(val lines: List<OcrLine>, val width: Int, val height: Int, val tookMs: Long = 0)
+/** OCR output for one camera frame, in upright image coordinates (+ a tiny colour picture of the card). */
+data class OcrFrame(
+    val lines: List<OcrLine>, val width: Int, val height: Int, val tookMs: Long = 0,
+    val thumb: CardThumb? = null,
+)
 
 /** What a card's printed identifier told us. [id] is what frame voting compares. */
 sealed interface ScanKey {
