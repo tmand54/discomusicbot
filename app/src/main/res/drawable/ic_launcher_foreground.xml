@@ -1,27 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- TCG Portfolio mark: a gold card with a rising value line, inside scanner corner brackets. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- back card -->
-    <group android:rotation="-12" android:pivotX="54" android:pivotY="54">
-        <path android:fillColor="#FF5B4BC4"
-            android:pathData="M40,30h26a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4h-26a4,4 0,0 1,-4 -4v-38a4,4 0,0 1,4 -4z" />
-    </group>
-    <!-- front card with holo gradient -->
-    <group android:rotation="8" android:pivotX="54" android:pivotY="54">
-        <path android:pathData="M42,29h26a4,4 0,0 1,4 4v40a4,4 0,0 1,-4 4h-26a4,4 0,0 1,-4 -4v-40a4,4 0,0 1,4 -4z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear"
-                    android:startX="38" android:startY="29" android:endX="72" android:endY="77">
-                    <item android:offset="0" android:color="#FF5EF2D6" />
-                    <item android:offset="0.5" android:color="#FF8C7BFF" />
-                    <item android:offset="1" android:color="#FFFF7AC6" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <!-- lightning bolt -->
-        <path android:fillColor="#FF0E1020"
-            android:pathData="M58,36 L46,55 L54,55 L50,70 L64,48 L56,48 Z" />
-    </group>
+    <!-- scanner brackets -->
+    <path android:strokeColor="#FF5ED6C8" android:strokeWidth="3.2" android:strokeLineCap="round"
+        android:pathData="M33,37 V31.5 A2.5,2.5 0 0 1 35.5,29 H41 M67,29 H72.5 A2.5,2.5 0 0 1 75,31.5 V37 M75,71 V76.5 A2.5,2.5 0 0 1 72.5,79 H67 M41,79 H35.5 A2.5,2.5 0 0 1 33,76.5 V71" />
+    <!-- gold card -->
+    <path android:pathData="M43.5,33h21a5,5 0,0 1,5 5v33a5,5 0,0 1,-5 5h-21a5,5 0,0 1,-5 -5v-33a5,5 0,0 1,5 -5z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="40" android:startY="34" android:endX="68" android:endY="74">
+                <item android:offset="0" android:color="#FFFFE29A" />
+                <item android:offset="0.55" android:color="#FFF5C451" />
+                <item android:offset="1" android:color="#FFE39A2E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- rising value line -->
+    <path android:strokeColor="#FF0F141A" android:strokeWidth="3.4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M44.5,67.5 L51,60 L56,63.5 L62.7,53" />
+    <path android:fillColor="#FF0F141A" android:strokeColor="#FF0F141A" android:strokeWidth="1.2"
+        android:strokeLineJoin="round"
+        android:pathData="M65.6,48.4 L65.1,55.9 L59,52 Z" />
 </vector>

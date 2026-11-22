@@ -40,8 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.tcgportfolio.model.Game
-import app.tcgportfolio.ui.theme.Gain
-import app.tcgportfolio.ui.theme.Loss
+import app.tcgportfolio.ui.theme.LocalMarketColors
 import app.tcgportfolio.ui.theme.Numeric
 import coil3.compose.SubcomposeAsyncImage
 import java.text.NumberFormat
@@ -58,8 +57,8 @@ fun pct(v: Double): String = (if (v >= 0) "+" else "−") + "%.1f%%".format(abs(
 
 @Composable
 fun gainColor(v: Double): Color = when {
-    v > 0.005 -> Gain
-    v < -0.005 -> Loss
+    v > 0.005 -> LocalMarketColors.current.gain
+    v < -0.005 -> LocalMarketColors.current.loss
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 

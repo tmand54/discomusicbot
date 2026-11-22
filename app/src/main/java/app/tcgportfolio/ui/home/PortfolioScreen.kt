@@ -66,7 +66,7 @@ import app.tcgportfolio.ui.components.gainColor
 import app.tcgportfolio.ui.components.money
 import app.tcgportfolio.ui.components.pct
 import app.tcgportfolio.ui.components.signedMoney
-import app.tcgportfolio.ui.theme.HoloBrush
+import app.tcgportfolio.ui.theme.AccentBrush
 import app.tcgportfolio.ui.theme.Numeric
 import app.tcgportfolio.work.Notifications
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,6 +145,11 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.Image(
+                    androidx.compose.ui.res.painterResource(app.tcgportfolio.R.drawable.logo_mark), contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                )
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("TCG Portfolio", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(
@@ -180,7 +185,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
 
         item {
             Card(
-                Modifier.fillMaxWidth().padding(16.dp).border(1.5.dp, HoloBrush, RoundedCornerShape(20.dp)),
+                Modifier.fillMaxWidth().padding(16.dp).border(1.5.dp, AccentBrush, RoundedCornerShape(20.dp)),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             ) {

@@ -34,8 +34,8 @@ android {
         applicationId = "app.tcgportfolio"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.9.0"
+        versionCode = 11
+        versionName = "1.10.0"
     }
 
     // ML Kit's on-device OCR is native code (~11 MB per ABI). Build a small APK per ABI plus a

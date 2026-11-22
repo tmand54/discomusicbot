@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.9.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.9.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.10.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.10.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
@@ -207,6 +207,12 @@ debug-signed bundles. In CI, the same values go in repository secrets, with the 
 base64-encoded as `SNAPSTACK_KEYSTORE_BASE64`. The GitHub Actions workflow builds APKs on every
 push (plus the Play bundle when the key secrets are set) and attaches the APKs to a GitHub Release
 when you push a `v*` tag.
+
+## Look
+
+The **Vault** theme pairs ink-black (dark mode) or warm paper (light mode) with the logo's gold and
+teal. The logo is a gold card with a rising value line inside scanner brackets, and Android 13+
+themed icons get an outline version. See [`theme-preview.png`](docs/play-store/graphics/theme-preview.png).
 
 ## Publishing on Google Play
 

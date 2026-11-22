@@ -98,9 +98,9 @@ import app.tcgportfolio.scan.ItemStatus
 import app.tcgportfolio.scan.SessionItem
 import app.tcgportfolio.ui.components.CardImage
 import app.tcgportfolio.ui.components.money
-import app.tcgportfolio.ui.theme.Gain
-import app.tcgportfolio.ui.theme.HoloBrush
-import app.tcgportfolio.ui.theme.Mint
+import app.tcgportfolio.ui.theme.AccentBrush
+import app.tcgportfolio.ui.theme.ScanVerified
+import app.tcgportfolio.ui.theme.Teal
 import app.tcgportfolio.ui.theme.Numeric
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -263,7 +263,7 @@ private fun StatusLine(ui: ScanUi, showStats: Boolean) {
             Spacer(Modifier.width(10.dp))
             Text(
                 "OCR ${ui.ocrMs} ms · ${"%.0f".format(ui.fps)} fps",
-                color = Mint, style = MaterialTheme.typography.labelSmall.merge(Numeric),
+                color = Teal, style = MaterialTheme.typography.labelSmall.merge(Numeric),
             )
         }
     }
@@ -307,14 +307,14 @@ private fun ScanOverlay(ui: ScanUi, modifier: Modifier) {
                 val dx = (size.width - fw * scale) / 2f; val dy = (size.height - fh * scale) / 2f
                 val pad = 8f
                 drawRoundRect(
-                    if (ui.detection.verified) Gain else accent,
+                    if (ui.detection.verified) ScanVerified else accent,
                     Offset(b.left * scale + dx - pad, b.top * scale + dy - pad),
                     Size(b.w * scale + 2 * pad, b.h * scale + 2 * pad),
                     CornerRadius(10f), style = Stroke(5f),
                 )
             }
         }
-        if (flash.value > 0f) drawRect(Gain.copy(alpha = flash.value * 0.35f))
+        if (flash.value > 0f) drawRect(ScanVerified.copy(alpha = flash.value * 0.35f))
     }
 }
 
@@ -400,7 +400,7 @@ private fun BottomPanel(
 private fun ShutterButton(onClick: () -> Unit, enabled: Boolean, busy: Boolean, binder: Boolean) {
     Box(
         Modifier.size(68.dp).clip(CircleShape)
-            .border(4.dp, if (enabled) HoloBrush else androidx.compose.ui.graphics.SolidColor(Color.Gray), CircleShape)
+            .border(4.dp, if (enabled) AccentBrush else androidx.compose.ui.graphics.SolidColor(Color.Gray), CircleShape)
             .padding(7.dp).clip(CircleShape)
             .background(if (enabled) Color.White else Color.Gray)
             .clickable(enabled = enabled, onClick = onClick),
