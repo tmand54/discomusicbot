@@ -11,10 +11,10 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `SnapStack-1.1.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `SnapStack-1.1.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `SnapStack-1.2.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `SnapStack-1.2.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
-1.1.0 installs over 1.0.0 as an update and keeps your collection.
+Each version installs over the previous one as an update and keeps your collection.
 
 Copy the APK to your phone and open it. Android asks you to allow installing from that source
 the first time. Requires Android 8.0 (API 26) or newer.
@@ -72,6 +72,31 @@ found ("Found in 12 ms · on device").
   Prices refresh daily in the background.
 * **Import a pasted list** (`4 Lightning Bolt`, `2x 123/193`, `LOB-EN001`).
 * **Backup / restore** to a JSON file, and **CSV export**.
+* **Import from Ripfolio:** Settings → *Import from Ripfolio or a CSV* (or the button on the empty
+  Portfolio). See below.
+
+## Moving over from Ripfolio
+
+1. In Ripfolio, go to **Settings → Back up**. That saves a file named `ripfolio-backup-YYYY-MM-DD.json`.
+2. In SnapStack, go to **Settings → Import from Ripfolio or a CSV** and pick that file. Any file
+   type is accepted, and the format is detected automatically.
+3. Each card is matched by game, set, number and name against the same databases the scanner
+   uses, then priced and added to your collection. Quantity, condition, foil, purchase price,
+   grading (company, grade, slab value, cert #) and the date added are carried over.
+
+The result screen lists anything that couldn't be matched, and you can copy that list. Some things
+can't come over:
+
+* **Sold, traded or removed cards.** Only cards you still own are imported.
+* **Sealed products.**
+* **Ripfolio's wantlist and custom lists.** The backup stores only Ripfolio's internal card IDs
+  for these, not names.
+* **Games SnapStack doesn't price yet,** such as Pokémon Japan and Dragon Ball.
+
+CSV files also work: Ripfolio's CSV export, SnapStack's own, or any CSV with a card-name column.
+Optional columns are set, number, game, quantity, condition, printing, purchase price and
+grading. Restoring a SnapStack backup through the same button replaces your collection, and
+asks you to confirm first.
 
 ## Data sources
 
@@ -114,6 +139,7 @@ every push and attaches them to a GitHub Release when you push a `v*` tag.
 app/src/main/java/app/snapstack/
   scan/        CardTextParser (OCR text → card numbers), FrameVoter, TextAnalyzer (CameraX + ML Kit), ScanSession
   data/        CardRepository (memory → device → network + set prefetch), CollectionRepository, Settings
+  data/importer/ Ripfolio / CSV / SnapStack backup import (parsing + card matching)
   data/source/ TCGdex, Scryfall, YGOPRODeck, Lorcast and tcgcsv (One Piece, Riftbound) clients
   data/db/     SQLite storage with change-notifying flows
   ui/          Jetpack Compose screens: portfolio, scan, collection, card, search, settings
