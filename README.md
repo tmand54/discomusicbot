@@ -12,15 +12,16 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.13.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.13.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.0.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.0.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
-**Coming from 1.8.0 or earlier?** From 1.9.0 the app's package name is `app.tcgportfolio` (it was
-`app.snapstack`). Android treats it as a different app, so it installs next to the old one instead
-of updating it. To move your data: in the old app, **Settings → Back up collection**; in the new
-app, **Settings → Restore a backup**; then uninstall the old one.
+**Had a pre-release build installed?** Version numbering restarted at 1.0.0 for the Play Store
+release, and Android won't install a lower version over a higher one. In the old build use
+**Settings → Back up collection**, uninstall it, install 1.0.0, then **Settings → Restore a backup**.
+Builds from before the rename (package `app.snapstack`) install alongside instead; move your data the
+same way and uninstall the old one.
 
 Copy the APK to your phone and open it. Android asks you to allow installing from that source
 the first time. Requires Android 8.0 (API 26) or newer.
