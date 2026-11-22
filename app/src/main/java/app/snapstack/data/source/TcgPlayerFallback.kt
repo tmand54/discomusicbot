@@ -95,7 +95,7 @@ class TcgPlayerFallback(http: Http) {
         fun adaptPrices(card: Card, tcg: Map<String, Double>): Map<String, Double> {
             if (tcg.isEmpty()) return tcg
             return when (card.game) {
-                // Yu-Gi-Oh! prices are keyed by rarity in SnapStack; TCGplayer splits by edition instead.
+                // Yu-Gi-Oh! prices are keyed by rarity in this app; TCGplayer splits by edition instead.
                 Game.YUGIOH -> mapOf(
                     (card.rarity ?: card.defaultVariant ?: "normal") to
                         (tcg["unlimited"] ?: tcg["1stEdition"] ?: tcg["limited"] ?: tcg.values.first()),

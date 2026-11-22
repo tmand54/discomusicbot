@@ -125,6 +125,29 @@ class LiveSourcesTest {
         println("optcgapi zoro hits=${hits.size} versions=${versions.map { it.name to it.price }}")
     }
 
+    @Test fun dragonBall() = runBlocking {
+        val src = TcgCsvSource(
+            http, Game.DRAGON_BALL, TcgCsvSource.DRAGON_BALL_FUSION_WORLD_CATEGORY, "dbs",
+            extraCategories = listOf(TcgCsvSource.DRAGON_BALL_SUPER_CATEGORY),
+        )
+        val sets = src.fetchSets()
+        assertTrue("both Dragon Ball games: ${sets.size}", sets.size > 120)
+        // Every code family maps onto real TCGplayer sets.
+        for (code in listOf("FB01-001", "FS01-01", "FP-006", "BT22-064", "BT5-115", "TB3-018", "DB1-003", "EX15-01", "P-001", "ST01-001")) {
+            assertTrue("no set for $code", TcgCsvSource.dragonBallGroups(code, sets).isNotEmpty())
+        }
+        val fb01 = TcgCsvSource.dragonBallGroups("FB01-001", sets)
+        val goku = fb01.flatMap { src.fetchSetCards(it).cards }.filter { it.number == "FB01-001" }
+        assertTrue(goku.any { it.name == "Son Goku" && it.prices.isNotEmpty() })
+        assertTrue(goku.any { it.name == "Son Goku (Alternate Art)" })
+        // A Super Card Game set (other category) downloads through the same source.
+        val bt5 = TcgCsvSource.dragonBallGroups("BT5-115", sets).first()
+        val bt5Cards = src.fetchSetCards(bt5).cards
+        assertTrue(bt5Cards.any { it.number == "BT5-115" })
+        assertTrue("TCGplayer's _PR suffix is dropped", bt5Cards.none { it.number.contains('_') })
+        println("dragonball sets=${sets.size} goku=${goku.map { it.name to it.prices }} bt5=${bt5.name}:${bt5Cards.size}")
+    }
+
     @Test fun riftbound() = runBlocking {
         val src = TcgCsvSource(http, Game.RIFTBOUND, TcgCsvSource.RIFTBOUND_CATEGORY, "rb")
         val sets = src.fetchSets()

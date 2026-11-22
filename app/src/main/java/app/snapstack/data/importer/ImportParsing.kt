@@ -34,7 +34,7 @@ data class ImportRow(
 
 enum class ImportFormat(val label: String) {
     LIST("Pasted list"),
-    SNAPSTACK("SnapStack backup"),
+    SNAPSTACK("TCG Portfolio backup"),
     RIPFOLIO("Ripfolio backup"),
     CSV("CSV file"),
     UNKNOWN("Unknown file"),
@@ -81,7 +81,7 @@ object ImportParsing {
         ImportFormat.LIST -> parseList(text, null)
         ImportFormat.SNAPSTACK -> ParsedImport(ImportFormat.SNAPSTACK, emptyList())
         ImportFormat.UNKNOWN -> throw ImportException(
-            "SnapStack couldn't recognise that file. It can read SnapStack backups, Ripfolio backups " +
+            "TCG Portfolio couldn't recognise that file. It can read its own backups, Ripfolio backups " +
                 "(ripfolio-backup-….json from Ripfolio → Settings → Back up) and CSV exports with a card name column."
         )
     }
@@ -294,18 +294,21 @@ object ImportParsing {
             "lorcana" in l -> Game.LORCANA
             "one piece" in l || "onepiece" in l -> Game.ONE_PIECE
             "riftbound" in l -> Game.RIFTBOUND
+            "dragon ball z" in l || "panini" in l -> null // the old Panini DBZ game isn't covered
+            "dragon ball" in l || "dbs" == l || "fusion world" in l -> Game.DRAGON_BALL
             else -> null
             }
         }
         val n = number?.uppercase(Locale.US) ?: return null
         return when {
+            Regex("^(FB|FS|SB|BT|TB|DB|EX|SD|XD)\\d{1,2}-\\d{2,3}$|^FP-\\d{3}$").containsMatchIn(n) -> Game.DRAGON_BALL
             Regex("^(OP|ST|EB|PRB)\\d{2}-\\d{3}").containsMatchIn(n) -> Game.ONE_PIECE
             Regex("^[A-Z0-9]{2,5}-(EN|E)[A-Z]?\\d{2,3}$").matches(n) -> Game.YUGIOH
             else -> null
         }
     }
 
-    /** True for labels like "Pokémon Japan" or "Dragon Ball" that SnapStack doesn't price. */
+    /** True for labels like "Pokémon Japan" that the app doesn't price. */
     fun unsupportedGame(label: String?): Boolean = label != null && gameFrom(label) == null
 
     fun conditionFrom(s: String?): Condition {
@@ -387,12 +390,17 @@ object ImportParsing {
         return scored.filter { it.second >= top - 1e-9 }.maxBy { normalizeSetName(it.first.name).length }.first
     }
 
-    private val trailingNumber = Regex("\\s+[-–]\\s+[A-Za-z]{0,5}\\d+[a-z]?(/[A-Za-z]{0,4}\\d+)?\\s*$")
+    private val trailingNumber = Regex("\\s+[-–]\\s+[A-Za-z]{0,5}\\d+(-\\d+)?[a-z]?(/[A-Za-z]{0,4}\\d+)?\\s*$")
     private val parenthetical = Regex("\\s*[(\\[][^)\\]]*[)\\]]")
+
+    private val inlineNumber = Regex("\\s+[-–]\\s+[A-Za-z]{0,5}\\d+(?:-\\d+)?[a-z]?(?:/[A-Za-z]{0,4}\\d+)?(?=\\s*(?:[(\\[]|$))")
+
+    /** "Son Goku - FB01-001 (Alternate Art)" → "Son Goku (Alternate Art)": drops a TCGplayer-style number. */
+    fun stripNumber(name: String): String = name.replace(inlineNumber, "").trim().ifEmpty { name.trim() }
 
     /** "Charizard ex - 199/165" → "Charizard ex"; "Lightning Bolt (Borderless)" → "Lightning Bolt". */
     fun baseName(name: String): String =
-        name.replace(trailingNumber, "").replace(parenthetical, "").trim().ifEmpty { name.trim() }
+        stripNumber(name).replace(trailingNumber, "").replace(parenthetical, "").trim().ifEmpty { name.trim() }
 
     /** The number with any "/total" removed ("199/165" → "199"); keeps prefixes like "TG05". */
     fun numberOnly(number: String): String = number.substringBefore('/').trim()

@@ -175,6 +175,7 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
                         Game.YUGIOH -> "Name or set code (LOB-EN001)"
                         Game.ONE_PIECE -> "Name or number (OP01-001)"
                         Game.RIFTBOUND -> "Name or number (179/298)"
+                        Game.DRAGON_BALL -> "Name or number (FB01-001)"
                         else -> "Card name"
                     }
                 )

@@ -83,6 +83,13 @@ data class OnePieceDonKey(val setHint: String? = null) : ScanKey {
     override val label get() = "DON!!"
 }
 
+/** Dragon Ball: Fusion World "FB01-001" / "FS01-01", Super Card Game "BT22-064" / "P-001". */
+data class DragonBallKey(val code: String) : ScanKey {
+    override val game get() = Game.DRAGON_BALL
+    override val id get() = "dbs|${code.uppercase(Locale.US)}"
+    override val label get() = code.uppercase(Locale.US)
+}
+
 /** Riftbound prints "OGN • 179/298"; the set code is optional (it is not always readable). */
 data class RiftboundKey(val set: String?, val number: String, val total: String?) : ScanKey {
     override val game get() = Game.RIFTBOUND

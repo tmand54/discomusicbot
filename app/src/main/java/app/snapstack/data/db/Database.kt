@@ -479,7 +479,7 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
 
     /** Replaces the user's data with the backup. Returns number of collection rows restored. */
     fun importJson(root: JSONObject): Int {
-        require(root.optString("format") == "snapstack-backup") { "Not a SnapStack backup file" }
+        require(root.optString("format") == "snapstack-backup") { "Not a TCG Portfolio backup file" }
         val db = writableDatabase
         var restored = 0
         db.beginTransaction()

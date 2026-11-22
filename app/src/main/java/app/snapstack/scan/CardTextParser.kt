@@ -18,6 +18,7 @@ import kotlin.math.min
  *  - Lorcana:  "123/204 • EN • 5" (number / total • language • set)
  *  - One Piece: "OP01-001" / "ST01-012" / "EB01-061" / "PRB01-001", promos "P-001"
  *  - Riftbound: "OGN • 179/298" (set • number/total), alt art "179a/298", signed cards add a star after the number
+ *  - Dragon Ball: Fusion World "FB01-001" / "FS01-01" / "FP-001", Super Card Game "BT22-064" / "TB3-018" / "P-001"
  */
 object CardTextParser {
 
@@ -44,6 +45,12 @@ object CardTextParser {
     private val onePieceCode = Regex("(?<![A-Za-z0-9])(OP|ST|EB|PRB)\\s?($LOOSE_DIGIT{2})\\s?-\\s?($LOOSE_DIGIT{3})(?![0-9])")
     /** A line that is just the DON!! logo ("DON!!", OCR'd as "DON!", "DONI!", "D0N!!"…). */
     private val donLine = Regex("^\\W{0,3}D\\s?[O0]\\s?N\\s?[!Il1|]{1,3}\\W{0,3}$")
+    private val dragonBallCode = Regex(
+        "(?<![A-Za-z0-9])(FB|FS|SB|ST|BT|TB|DB|EB|EX|SD|XD)\\s?($LOOSE_DIGIT{1,2})\\s?-\\s?($LOOSE_DIGIT{2,3})(?![0-9])"
+    )
+    private val dragonBallPromo = Regex("(?<![A-Za-z0-9])(FP|P|E|M)\\s?-\\s?($LOOSE_DIGIT{2,3})(?![0-9])")
+    /** Codes that both One Piece and Dragon Ball print ("ST01-001", "EB01-061"). */
+    private val sharedPrefixes = setOf("ST", "EB")
     private val onePiecePromo = Regex("(?<![A-Za-z0-9])P\\s?-\\s?($LOOSE_DIGIT{3})(?![0-9])")
     private val riftboundPrefix = Regex("([A-Z]{3})\\s*[•·.*\\-‧∙●]?\\s*$")
     private val riftboundPublic = Regex("(?<![A-Za-z0-9])([A-Z]{3})\\s?-\\s?($LOOSE_DIGIT{3}[a-z]?\\*?)(?![0-9/])")
@@ -81,6 +88,11 @@ object CardTextParser {
         Game.ONE_PIECE to listOf(
             "don!!", "\\bdon\\s?x\\d", "\\bcounter\\b", "\\bleader\\b", "\\btrigger\\b", "\\bblocker\\b",
             "on play", "when attacking", "activate\\s?:\\s?main", "\\bbanish\\b", "straw hat", "\\bon k\\.?o\\.?", "your turn",
+        ).map { Regex(it) },
+        Game.DRAGON_BALL to listOf(
+            "bird studio", "\\bsaiyan\\b", "\\bcombo\\b", "\\bawaken", "\\bunison\\b", "z-?energy", "double strike",
+            "triple strike", "\\bcritical\\b", "dragon ball", "\\bbarrier\\b", "son goku", "\\bvegeta\\b", "\\bfrieza\\b",
+            "\\benergy\\b.*\\bcost\\b",
         ).map { Regex(it) },
         Game.RIFTBOUND to listOf(
             "\\bmight\\b", "\\bbattlefield\\b", "\\bchampion\\b", "\\blegend\\b", "\\brunes?\\b", "\\bgear\\b",
@@ -182,14 +194,39 @@ object CardTextParser {
             for (m in onePieceCode.findAll(line.text)) {
                 val set = digitsLoose(m.groupValues[2]); val num = digitsLoose(m.groupValues[3])
                 if (!(set + num).all { it.isDigit() }) continue
-                val score = 0.86 + 0.15 * ctxOf(Game.ONE_PIECE) + if (game == Game.ONE_PIECE) 0.1 else 0.0
+                var score = 0.86 + 0.15 * ctxOf(Game.ONE_PIECE) + if (game == Game.ONE_PIECE) 0.1 else 0.0
+                // "ST01-001" / "EB01-061" exist in Dragon Ball too: let the card's other words decide.
+                if (m.groupValues[1] in sharedPrefixes && game == null && ctxOf(Game.DRAGON_BALL) > ctxOf(Game.ONE_PIECE)) score -= 0.3
                 out += Detection(OnePieceKey("${m.groupValues[1]}$set-$num"), score, line.box)
             }
             for (m in onePiecePromo.findAll(line.text)) {
                 if (game != Game.ONE_PIECE && ctxOf(Game.ONE_PIECE) < 0.34) continue
+                if (game == null && ctxOf(Game.DRAGON_BALL) > ctxOf(Game.ONE_PIECE)) continue
                 val num = digitsLoose(m.groupValues[1])
                 if (!num.all { it.isDigit() }) continue
                 out += Detection(OnePieceKey("P-$num"), 0.6 + 0.2 * ctxOf(Game.ONE_PIECE), line.box)
+            }
+        }
+
+        // ---- Dragon Ball: "FB01-001", "BT22-064", promos "FP-001" / "P-001".
+        if (allowed(Game.DRAGON_BALL)) lines.forEach { line ->
+            for (m in dragonBallCode.findAll(line.text)) {
+                val prefix = m.groupValues[1]
+                val set = digitsLoose(m.groupValues[2]); val num = digitsLoose(m.groupValues[3])
+                if (!(set + num).all { it.isDigit() }) continue
+                var score = 0.84 + 0.15 * ctxOf(Game.DRAGON_BALL) + if (game == Game.DRAGON_BALL) 0.1 else 0.0
+                if (prefix in sharedPrefixes && game == null && ctxOf(Game.DRAGON_BALL) <= ctxOf(Game.ONE_PIECE)) score -= 0.3
+                out += Detection(DragonBallKey("$prefix$set-$num"), score, line.box)
+            }
+            for (m in dragonBallPromo.findAll(line.text)) {
+                val prefix = m.groupValues[1]
+                // "P-001" is also a One Piece promo, and "E-"/"M-" are short: they need Dragon Ball words around them.
+                if (prefix != "FP" && game != Game.DRAGON_BALL && ctxOf(Game.DRAGON_BALL) < 0.34) continue
+                if (prefix == "P" && game == null && ctxOf(Game.ONE_PIECE) >= ctxOf(Game.DRAGON_BALL)) continue
+                val num = digitsLoose(m.groupValues[2])
+                if (!num.all { it.isDigit() }) continue
+                val score = (if (prefix == "FP") 0.8 else 0.6) + 0.2 * ctxOf(Game.DRAGON_BALL)
+                out += Detection(DragonBallKey("$prefix-$num"), score, line.box)
             }
         }
 
@@ -268,6 +305,19 @@ object CardTextParser {
         if (text.isEmpty()) return null
         val upper = text.uppercase(Locale.US)
 
+        if (game == Game.DRAGON_BALL) {
+            dragonBallCode.find(upper)?.let { m ->
+                return DragonBallKey("${m.groupValues[1]}${digitsLoose(m.groupValues[2])}-${digitsLoose(m.groupValues[3])}")
+            }
+            dragonBallPromo.find(upper)?.let { m -> return DragonBallKey("${m.groupValues[1]}-${digitsLoose(m.groupValues[2])}") }
+        }
+        if (game == null) {
+            // Codes only Dragon Ball uses; "ST…"/"EB…"/"P-…" are read as One Piece unless Dragon Ball is picked.
+            dragonBallCode.find(upper)?.takeIf { it.groupValues[1] !in sharedPrefixes }?.let { m ->
+                return DragonBallKey("${m.groupValues[1]}${digitsLoose(m.groupValues[2])}-${digitsLoose(m.groupValues[3])}")
+            }
+            dragonBallPromo.find(upper)?.takeIf { it.groupValues[1] == "FP" }?.let { m -> return DragonBallKey("FP-${digitsLoose(m.groupValues[2])}") }
+        }
         if (game == null || game == Game.ONE_PIECE) {
             if (Regex("^DON\\s*!{0,2}( CARD)?$").matches(upper)) return OnePieceDonKey()
             onePieceCode.find(upper)?.let { m ->

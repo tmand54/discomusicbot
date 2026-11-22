@@ -25,7 +25,7 @@ class AppGraph(val app: Application) {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val settings = Settings(app)
     val db = Database(app)
-    val http = Http(app.cacheDir, "SnapStack/${BuildConfig.VERSION_NAME} (Android; personal collection app)")
+    val http = Http(app.cacheDir, "TCGPortfolio/${BuildConfig.VERSION_NAME} (Android; personal collection app)")
 
     val cards: CardRepository by lazy {
         CardRepository(
@@ -37,6 +37,10 @@ class AppGraph(val app: Application) {
                 Game.LORCANA to LorcanaSource(http),
                 Game.ONE_PIECE to TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op"),
                 Game.RIFTBOUND to TcgCsvSource(http, Game.RIFTBOUND, TcgCsvSource.RIFTBOUND_CATEGORY, "rb"),
+                Game.DRAGON_BALL to TcgCsvSource(
+                    http, Game.DRAGON_BALL, TcgCsvSource.DRAGON_BALL_FUSION_WORLD_CATEGORY, "dbs",
+                    extraCategories = listOf(TcgCsvSource.DRAGON_BALL_SUPER_CATEGORY),
+                ),
             ),
             tcgplayer = TcgPlayerFallback(http),
             optcg = OptcgApi(http),

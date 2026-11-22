@@ -14,6 +14,7 @@ import app.snapstack.model.CardSet
 import app.snapstack.model.Game
 import app.snapstack.model.normalizeNumber
 import app.snapstack.scan.CardTextParser
+import app.snapstack.scan.DragonBallKey
 import app.snapstack.scan.LorcanaKey
 import app.snapstack.scan.MagicKey
 import app.snapstack.scan.NameKey
@@ -124,6 +125,7 @@ class CardRepository(
         is NameKey -> resolveName(key)
         is OnePieceKey -> resolveOnePiece(key)
         is OnePieceDonKey -> resolveDon(key)
+        is DragonBallKey -> resolveDragonBall(key)
         is RiftboundKey -> resolveRiftbound(key)
     }
 
@@ -182,6 +184,28 @@ class CardRepository(
         }
         if (matches.isEmpty()) return Resolution(null)
         return rankPrintings(matches, prefix, from)
+    }
+
+    /**
+     * Dragon Ball codes → TCGplayer sets. Fusion World and recent Super Card Game boosters use the printed
+     * code as the set abbreviation ("FB01", "BT22"); older ones are "DBS-B05", tournament packs "DBS-TB03".
+     * Starter-deck codes (SD/XD) live inside booster sets and resolve once that set is on the phone.
+     */
+    private suspend fun resolveDragonBall(key: DragonBallKey): Resolution {
+        val code = key.code.uppercase(Locale.US)
+        var matches = db.findByNumber(Game.DRAGON_BALL, code)
+        var from = ResolvedFrom.DEVICE
+        var preferred: String? = null
+        if (matches.isEmpty()) {
+            from = ResolvedFrom.NETWORK
+            ensureSetList(Game.DRAGON_BALL)
+            val groups = TcgCsvSource.dragonBallGroups(code, db.getSets(Game.DRAGON_BALL))
+            preferred = groups.firstOrNull()?.abbreviation
+            downloadSets(groups.take(6))
+            matches = db.findByNumber(Game.DRAGON_BALL, code)
+        }
+        if (matches.isEmpty()) return Resolution(null)
+        return rankPrintings(matches, preferred, from)
     }
 
     /** "OGN • 179/298": set code (when readable) → TCGplayer group; the number/total picks the card. */

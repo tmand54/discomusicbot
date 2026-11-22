@@ -102,7 +102,7 @@ private fun ImportSheet(initialGame: Game?, onDismiss: () -> Unit, onPickFile: (
             }
             OutlinedButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                Text("Choose a file — CSV, collection-app backup, or SnapStack backup")
+                Text("Choose a file — CSV, list, or a backup")
             }
             Text(
                 "Files from other collection apps (for example a Ripfolio backup .json) and CSV exports are recognised automatically.",

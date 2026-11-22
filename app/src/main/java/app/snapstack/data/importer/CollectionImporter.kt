@@ -12,6 +12,7 @@ import app.snapstack.model.CardSet
 import app.snapstack.model.CollectionItem
 import app.snapstack.model.Game
 import app.snapstack.model.normalizeNumber
+import app.snapstack.scan.DragonBallKey
 import app.snapstack.scan.LorcanaKey
 import app.snapstack.scan.MagicKey
 import app.snapstack.scan.NameKey
@@ -60,7 +61,7 @@ sealed interface ImportUi {
 }
 
 /**
- * Brings a collection in from a file: a SnapStack backup (replaces), or a Ripfolio backup / CSV
+ * Brings a collection in from a file: a backup made by this app (replaces), or a Ripfolio backup / CSV
  * (adds). Other apps' cards are matched by game + set + number + name against the same sources
  * the scanner uses, then priced, then saved in one go. Runs in the app scope so it keeps going
  * if you switch tabs; progress and the result are shown by [app.snapstack.ui.importer.ImportDialogs].
@@ -79,7 +80,7 @@ class CollectionImporter(
         if (_state.value !is ImportUi.Running) _state.value = null
     }
 
-    /** Reads the picked file and either asks to replace (SnapStack backup) or starts importing. */
+    /** Reads the picked file and either asks to replace (own backup) or starts importing. */
     /** Imports pasted text: a list (one card per line) or CSV. [game] is used for lines that don't say. */
     fun startText(text: String, game: Game?) {
         if (_state.value is ImportUi.Running || text.isBlank()) return
@@ -307,6 +308,11 @@ class CollectionImporter(
                 }
                 set?.let { fromSetByName(it) }
             }
+            Game.DRAGON_BALL -> {
+                val set = bestSet(game, row.setName)
+                number?.let { tryKey(DragonBallKey(it.uppercase(Locale.US).substringBefore('_').substringBefore(' '))) }
+                set?.let { fromSetByName(it) }
+            }
             Game.RIFTBOUND -> {
                 val set = bestSet(game, row.setName)
                 number?.let { num -> tryKey(RiftboundKey(set?.abbreviation, ImportParsing.numberOnly(num), ImportParsing.totalOf(num))) }
@@ -329,12 +335,16 @@ class CollectionImporter(
     private fun choose(row: ImportRow, candidates: Collection<Card>, requireNumber: Boolean = true): Card? {
         if (candidates.isEmpty()) return null
         val game = row.game
-        val exactNames = game == Game.ONE_PIECE || game == Game.RIFTBOUND // parallels differ only by "(…)"
+        val exactNames = game == Game.ONE_PIECE || game == Game.RIFTBOUND || game == Game.DRAGON_BALL // parallels differ only by "(…)"
         val base = ImportParsing.baseName(row.name)
         val wantNumber = (row.number ?: ImportParsing.numberFromName(row.name))?.let { normalizeNumber(ImportParsing.numberOnly(it)) }
         val scored = candidates.map { c ->
             val nameScore = if (exactNames) {
-                max(TextMatch.nameScore(c.name, listOf(row.name)) * 1.0, TextMatch.nameScore(ImportParsing.baseName(c.name), listOf(base)) * 0.85)
+                maxOf(
+                    TextMatch.nameScore(c.name, listOf(row.name)),
+                    TextMatch.nameScore(ImportParsing.stripNumber(c.name), listOf(ImportParsing.stripNumber(row.name))),
+                    TextMatch.nameScore(ImportParsing.baseName(c.name), listOf(base)) * 0.85,
+                )
             } else {
                 maxOf(
                     TextMatch.nameScore(c.title, listOf(base)),

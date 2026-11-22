@@ -9,6 +9,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Games without a dedicated free card API (One Piece, Riftbound) come from tcgcsv.com, a free
@@ -24,17 +25,29 @@ class TcgCsvSource(
     override val game: Game,
     private val categoryId: Int,
     private val idPrefix: String,
+    /** More TCGplayer categories shown as the same game (Dragon Ball = Fusion World + Super Card Game). */
+    private val extraCategories: List<Int> = emptyList(),
 ) : CardSource {
-    private val base = "https://tcgcsv.com/tcgplayer/$categoryId"
+    private val categories = listOf(categoryId) + extraCategories
+    /** Group ids are unique across TCGplayer, so a set code is just its group id; this remembers the category. */
+    private val groupCategory = ConcurrentHashMap<String, Int>()
 
-    override suspend fun fetchSets(): List<CardSet> {
-        val arr = http.getJson("$base/groups")?.optJSONArray("results") ?: return emptyList()
-        return buildList {
+    private suspend fun base(groupId: String): String {
+        if (categories.size == 1) return "https://tcgcsv.com/tcgplayer/$categoryId"
+        val cat = groupCategory[groupId] ?: run { runCatching { fetchSets() }; groupCategory[groupId] } ?: categoryId
+        return "https://tcgcsv.com/tcgplayer/$cat"
+    }
+
+    override suspend fun fetchSets(): List<CardSet> = categories.flatMap { cat ->
+        val arr = http.getJson("https://tcgcsv.com/tcgplayer/$cat/groups")?.optJSONArray("results") ?: return@flatMap emptyList()
+        buildList {
             for (i in 0 until arr.length()) {
                 val g = arr.getJSONObject(i)
+                val code = g.getLong("groupId").toString()
+                groupCategory[code] = cat
                 add(
                     CardSet(
-                        game = game, code = g.getLong("groupId").toString(), name = g.optString("name"),
+                        game = game, code = code, name = g.optString("name"),
                         printedTotal = null, total = null,
                         abbreviation = g.optStr("abbreviation"),
                         releaseDate = g.optStr("publishedOn")?.take(10),
@@ -45,6 +58,7 @@ class TcgCsvSource(
     }
 
     override suspend fun fetchSetCards(set: CardSet): SetDownload = coroutineScope {
+        val base = base(set.code)
         val products = async { http.getJson("$base/${set.code}/products")?.optJSONArray("results") }
         val prices = async { runCatching { fetchGroupPrices(set.code) }.getOrDefault(emptyMap()) }
         val arr = products.await() ?: return@coroutineScope SetDownload(emptyList())
@@ -59,13 +73,17 @@ class TcgCsvSource(
                 }
                 val isDon = ext["CardType"] == "DON!!" || ext["Rarity"] == "DON!!"
                 // DON!! cards print no number; anything else without one is sealed product.
-                val number = ext["Number"]?.trim()?.takeIf { it.isNotEmpty() } ?: if (isDon) DON_NUMBER else continue
+                // "BT8-001_PR" → "BT8-001": the suffix is TCGplayer's, the card prints the plain code.
+                val number = ext["Number"]?.trim()?.substringBefore('_')?.takeIf { it.isNotEmpty() }
+                    ?: if (isDon) DON_NUMBER else continue
                 val id = p.getLong("productId")
                 val image = p.optStr("imageUrl")
                 val prices = priceMap[id] ?: emptyMap()
                 add(
                     Card(
-                        id = "$idPrefix:$id", game = game, name = p.optString("name"),
+                        // TCGplayer adds the number to some names ("Son Goku - FB01-001"); it's shown separately.
+                        id = "$idPrefix:$id", game = game,
+                        name = p.optString("name").replace(" - ${ext["Number"]?.trim()}", "").trim(),
                         setCode = set.code, setName = set.name, number = number,
                         rarity = ext["Rarity"],
                         imageSmall = image, imageLarge = image?.replace("_200w.", "_400w."),
@@ -80,7 +98,7 @@ class TcgCsvSource(
 
     /** productId -> (variant -> market price) for one set. */
     private suspend fun fetchGroupPrices(groupId: String): Map<Long, Map<String, Double>> {
-        val arr = http.getJson("$base/$groupId/prices")?.optJSONArray("results") ?: return emptyMap()
+        val arr = http.getJson("${base(groupId)}/$groupId/prices")?.optJSONArray("results") ?: return emptyMap()
         val out = HashMap<Long, LinkedHashMap<String, Double>>()
         for (i in 0 until arr.length()) {
             val r = arr.getJSONObject(i)
@@ -120,6 +138,35 @@ class TcgCsvSource(
         const val DON_NUMBER = "DON!!"
         const val ONE_PIECE_CATEGORY = 68
         const val RIFTBOUND_CATEGORY = 89
+        const val DRAGON_BALL_FUSION_WORLD_CATEGORY = 80
+        const val DRAGON_BALL_SUPER_CATEGORY = 27
+
+        /**
+         * TCGplayer sets that hold a Dragon Ball code: Fusion World and recent Super Card Game boosters use
+         * the printed prefix as the set abbreviation ("FB01", "BT22"); older boosters are "DBS-B05",
+         * tournament packs "DBS-TB03", expansions "DBS-BE15", promos "PR" / "DBSFW_PR".
+         */
+        fun dragonBallGroups(code: String, sets: List<CardSet>): List<CardSet> {
+            val m = Regex("^([A-Z]+)(\\d*)-").find(code.uppercase(Locale.US)) ?: return emptyList()
+            val letters = m.groupValues[1]
+            val n = m.groupValues[2].toIntOrNull()
+            fun ab(a: String) = sets.filter {
+                val abbr = it.abbreviation ?: return@filter false
+                abbr.equals(a, true) || abbr.startsWith(a + "_", true) || abbr.equals(a + "PRE", true)
+            }
+            fun pad(x: Int?) = x?.let { "%02d".format(it) } ?: ""
+            return when (letters) {
+                "FB", "FS", "SB", "ST" -> ab(letters + pad(n))
+                "FP", "E" -> ab("DBSFW_PR")
+                "BT" -> ab("BT$n") + ab("BT${pad(n)}") + ab("DBS-B${pad(n)}")
+                "TB" -> ab("DBS-TB${pad(n)}")
+                "DB" -> ab("DB$n")
+                "EB" -> ab("EB-${pad(n)}") + ab("DBS-EB${pad(n)}")
+                "EX" -> ab("DBS-BE${pad(n)}")
+                "P" -> ab("PR")
+                else -> emptyList()
+            }.distinctBy { it.code }
+        }
 
         /** Words TCGplayer appends to special printings that share a card number. */
         private val special = Regex(

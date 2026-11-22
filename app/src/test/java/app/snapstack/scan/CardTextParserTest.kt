@@ -127,6 +127,30 @@ class CardTextParserTest {
         assertTrue(CardTextParser.parse(wordy).none { it.key is OnePieceDonKey })
     }
 
+    @Test fun dragonBallFusionWorld() {
+        assertEquals(DragonBallKey("FB01-001").id, best(frame("Son Goku", "Leader", "FB01-001"))!!.id)
+        assertEquals(DragonBallKey("FS01-01").id, best(frame("Son Goku", "FS01-O1"))!!.id)
+        assertEquals(DragonBallKey("FP-006").id, best(frame("Vegeta", "FP-006"))!!.id)
+    }
+
+    @Test fun dragonBallSuperCardGame() {
+        assertEquals(DragonBallKey("BT22-064").id, best(frame("SS Son Goku", "Battle", "BT22-064"))!!.id)
+        assertEquals(DragonBallKey("BT5-115").id, best(frame("Frieza", "BT5-115"))!!.id)
+        assertEquals(DragonBallKey("TB3-018").id, best(frame("TB3-018"))!!.id)
+        // "P-001" is a Dragon Ball promo when the card reads like Dragon Ball…
+        assertEquals(DragonBallKey("P-001").id, best(frame("Son Goku", "Saiyan", "Combo", "Critical", "P-001"))!!.id)
+    }
+
+    @Test fun sharedCodesFollowTheCardsWords() {
+        // "ST01-001" is printed by both games.
+        val op = best(frame("Monkey.D.Luffy", "Leader", "[DON!! x1]", "Counter", "Blocker", "ST01-001"))
+        assertTrue(op is OnePieceKey)
+        val dbs = best(frame("Son Goten", "Saiyan", "Combo", "Awaken", "Critical", "ST01-001"))
+        assertTrue(dbs is DragonBallKey)
+        assertTrue(best(frame("ST01-001"), Game.DRAGON_BALL) is DragonBallKey)
+        assertTrue(best(frame("ST01-001"), Game.ONE_PIECE) is OnePieceKey)
+    }
+
     @Test fun riftboundSetAndNumber() {
         val key = best(frame("Ahri, Inquisitive", "Unit", "OGN • 119/298")) as RiftboundKey
         assertEquals("OGN", key.set); assertEquals("119", key.number); assertEquals("298", key.total)
@@ -200,6 +224,11 @@ class CardTextParserTest {
         assertEquals(OnePieceKey("OP01-001").id, CardTextParser.parseTyped("op01-001", null)!!.id)
         assertEquals(OnePieceKey("P-001").id, CardTextParser.parseTyped("P-001", Game.ONE_PIECE)!!.id)
         assertTrue(CardTextParser.parseTyped("DON!!", null) is OnePieceDonKey)
+        assertEquals(DragonBallKey("FB01-001").id, CardTextParser.parseTyped("fb01-001", null)!!.id)
+        assertEquals(DragonBallKey("BT22-064").id, CardTextParser.parseTyped("BT22-064", null)!!.id)
+        assertTrue(CardTextParser.parseTyped("ST01-001", null) is OnePieceKey)
+        assertTrue(CardTextParser.parseTyped("ST01-001", Game.DRAGON_BALL) is DragonBallKey)
+        assertEquals(DragonBallKey("P-001").id, CardTextParser.parseTyped("P-001", Game.DRAGON_BALL)!!.id)
         assertTrue(CardTextParser.parseTyped("don", Game.ONE_PIECE) is OnePieceDonKey)
         val rb = CardTextParser.parseTyped("OGN 179/298", null) as RiftboundKey
         assertEquals("OGN", rb.set); assertEquals("179", rb.number); assertEquals("298", rb.total)

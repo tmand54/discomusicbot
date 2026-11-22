@@ -55,7 +55,7 @@ fun ImportDialogs() {
         )
         is ImportUi.ConfirmReplace -> AlertDialog(
             onDismissRequest = importer::dismiss,
-            title = { Text("Restore SnapStack backup?") },
+            title = { Text("Restore this backup?") },
             text = {
                 Text(
                     "${s.fileName ?: "This backup"} will replace the cards, wantlist, alerts and rips currently on this phone. " +
@@ -150,7 +150,7 @@ private fun ProgressDialog(text: String, progress: Float?) {
                 else CircularProgressIndicator()
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Keep SnapStack open — cards are matched against the card databases and priced.",
+                    "Keep TCG Portfolio open — cards are matched against the card databases and priced.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

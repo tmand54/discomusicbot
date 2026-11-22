@@ -232,23 +232,23 @@ fun SettingsScreen() {
 
         Group("Your data")
         Action("Back up collection", "Save everything to a file you can restore on any phone") {
-            backupLauncher.launch("snapstack-backup-${LocalDate.now()}.json")
+            backupLauncher.launch("tcg-portfolio-backup-${LocalDate.now()}.json")
         }
         Action(
             "Import from list or CSV",
             "Paste a card list, or choose a CSV or another collection app's backup file. Adds the cards to your collection.",
         ) { importSheet.open() }
-        Action("Restore a SnapStack backup", "Replaces your current collection with the backup's contents") { importFile() }
-        Action("Export CSV", "Spreadsheet of every copy with prices") { csvLauncher.launch("snapstack-collection-${LocalDate.now()}.csv") }
+        Action("Restore a backup", "Replaces your current collection with a backup made by this app") { importFile() }
+        Action("Export CSV", "Spreadsheet of every copy with prices") { csvLauncher.launch("tcg-portfolio-collection-${LocalDate.now()}.csv") }
 
         Group("About")
         Text(
-            "SnapStack ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no tracking. " +
+            "TCG Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no tracking. " +
                 "Card text is read on-device with ML Kit; only the card number is sent to look a card up.\n\n" +
                 "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
                 "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound). Backups when a source is down or has no price: " +
                 "the TCGplayer catalog (Pokémon, Magic, Yu-Gi-Oh!, Lorcana) and optcgapi.com (One Piece search and prices). " +
-                "Prices are TCGplayer market prices in USD where available. SnapStack is not affiliated with, endorsed or " +
+                "Prices are TCGplayer market prices in USD where available. TCG Portfolio is not affiliated with, endorsed or " +
                 "sponsored by any card game publisher, TCGplayer, or the data providers. All card names and images are " +
                 "property of their respective owners.",
             style = MaterialTheme.typography.bodySmall,

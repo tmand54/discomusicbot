@@ -208,7 +208,7 @@ fun CardDetailScreen(cardId: String, onBack: () -> Unit) {
                     )
                 } else {
                     Text(
-                        "SnapStack records this card's price each day it's in your collection, wantlist or alerts.",
+                        "TCG Portfolio records this card's price each day it's in your collection, wantlist or alerts.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -291,6 +291,7 @@ private fun tcgplayerSearch(c: Card): String {
         app.snapstack.model.Game.LORCANA -> "lorcana-tcg"
         app.snapstack.model.Game.ONE_PIECE -> "one-piece-card-game"
         app.snapstack.model.Game.RIFTBOUND -> "riftbound-league-of-legends-trading-card-game"
+        app.snapstack.model.Game.DRAGON_BALL -> "dragon-ball-super-fusion-world"
     }
     return "https://www.tcgplayer.com/search/$game/product?q=${query(c)}"
 }
