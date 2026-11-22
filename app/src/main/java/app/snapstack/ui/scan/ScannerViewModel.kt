@@ -121,7 +121,11 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
         if (best != null && best.key.id == commitId) commit(best.key)
     }
 
-    private fun commit(key: ScanKey) {
+    private fun commit(scanned: ScanKey) {
+        val key = if (scanned is app.snapstack.scan.OnePieceDonKey && scanned.setHint == null) {
+            // DON!! cards don't say which set they're from: assume the pack/deck being scanned.
+            scanned.copy(setHint = session.items.value.firstOrNull { it.card?.game == Game.ONE_PIECE && it.card.number != "DON!!" }?.card?.setCode)
+        } else scanned
         lastCommittedId = key.id
         feedback()
         val uid = session.add(key)

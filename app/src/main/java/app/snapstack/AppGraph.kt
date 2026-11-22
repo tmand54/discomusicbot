@@ -10,7 +10,9 @@ import app.snapstack.data.net.Http
 import app.snapstack.data.source.LorcanaSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.OptcgApi
 import app.snapstack.data.source.TcgCsvSource
+import app.snapstack.data.source.TcgPlayerFallback
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.Game
 import app.snapstack.scan.ScanSession
@@ -36,6 +38,8 @@ class AppGraph(val app: Application) {
                 Game.ONE_PIECE to TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op"),
                 Game.RIFTBOUND to TcgCsvSource(http, Game.RIFTBOUND, TcgCsvSource.RIFTBOUND_CATEGORY, "rb"),
             ),
+            tcgplayer = TcgPlayerFallback(http),
+            optcg = OptcgApi(http),
         )
     }
     val collection: CollectionRepository by lazy { CollectionRepository(db, cards, settings) }

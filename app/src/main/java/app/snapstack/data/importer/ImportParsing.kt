@@ -28,9 +28,12 @@ data class ImportRow(
     val gradedValue: Double? = null,
     val addedAt: Long? = null,
     val notes: String? = null,
+    /** For pasted lists: the card number/name already parsed into a lookup key. */
+    val key: app.snapstack.scan.ScanKey? = null,
 )
 
 enum class ImportFormat(val label: String) {
+    LIST("Pasted list"),
     SNAPSTACK("SnapStack backup"),
     RIPFOLIO("Ripfolio backup"),
     CSV("CSV file"),
@@ -75,11 +78,52 @@ object ImportParsing {
     fun parse(text: String): ParsedImport = when (detect(text)) {
         ImportFormat.RIPFOLIO -> parseRipfolio(text)
         ImportFormat.CSV -> parseCsv(text)
+        ImportFormat.LIST -> parseList(text, null)
         ImportFormat.SNAPSTACK -> ParsedImport(ImportFormat.SNAPSTACK, emptyList())
         ImportFormat.UNKNOWN -> throw ImportException(
             "SnapStack couldn't recognise that file. It can read SnapStack backups, Ripfolio backups " +
                 "(ripfolio-backup-….json from Ripfolio → Settings → Back up) and CSV exports with a card name column."
         )
+    }
+
+    // ------------------------------------------------------------------ pasted list
+
+    /** Label used for name-only lines when no game was picked. */
+    const val NO_GAME = "lines with only a name (pick a game to look those up)"
+
+    private val qtyPrefix = Regex("^(\\d{1,3})\\s*[xX×]?\\s+(.+)$")
+    private val qtySuffix = Regex("^(.+?)\\s+[xX×](\\d{1,3})$")
+
+    /**
+     * One card per line: "4 Lightning Bolt", "2x 123/193", "OP01-001", "LOB-EN001 x3", "MKM 123",
+     * "Charizard ex 199/165". Lines are parsed with the same reader as the scanner's "Type #".
+     */
+    fun parseList(text: String, game: Game?): ParsedImport {
+        val rows = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("//") && !it.startsWith("#") }
+            .take(2000).map { line ->
+                var qty = 1
+                var rest = line
+                qtyPrefix.find(line)?.let { m -> qty = m.groupValues[1].toInt(); rest = m.groupValues[2] }
+                    ?: qtySuffix.find(line)?.let { m -> qty = m.groupValues[2].toInt(); rest = m.groupValues[1] }
+                val key = app.snapstack.scan.CardTextParser.parseTyped(rest, game)
+                ImportRow(
+                    game = key?.game, gameLabel = if (key == null) NO_GAME else null,
+                    name = rest, number = null, setName = null, qty = qty.coerceAtLeast(1), key = key,
+                )
+            }.toList()
+        return ParsedImport(ImportFormat.LIST, rows)
+    }
+
+    /** Pasted text: a CSV (has a header row with a name column) or a plain list. */
+    fun parsePasted(text: String, game: Game?): ParsedImport {
+        val trimmed = text.trim()
+        if (trimmed.startsWith("{")) return parse(trimmed)
+        val header = trimmed.lineSequence().firstOrNull().orEmpty().lowercase(Locale.US)
+        val looksCsv = (header.contains(',') || header.contains('\t') || header.contains(';')) &&
+            headerAliases.getValue("name").any { alias -> header.split(',', ';', '\t').map { it.trim().trim('"') }.contains(alias) }
+        if (!looksCsv) return parseList(trimmed, game)
+        val csv = parseCsv(trimmed)
+        return if (game == null) csv else csv.copy(rows = csv.rows.map { if (it.game == null && it.gameLabel == null) it.copy(game = game) else it })
     }
 
     // ------------------------------------------------------------------ Ripfolio

@@ -112,6 +112,21 @@ class CardTextParserTest {
         assertEquals(OnePieceKey("P-001").id, best(frame("P-001"), Game.ONE_PIECE)!!.id)
     }
 
+    @Test fun onePieceDonCard() {
+        assertEquals(OnePieceDonKey().id, best(frame("DON!!"))!!.id)
+        assertEquals(OnePieceDonKey().id, best(frame("DONI!", "+1000"))!!.id)
+        assertEquals(OnePieceDonKey().id, best(frame("D0N!!", "Your Turn"), Game.ONE_PIECE)!!.id)
+    }
+
+    @Test fun regularOnePieceCardIsNotDon() {
+        // Rules text mentions DON!!, but the card code wins.
+        val key = best(frame("Roronoa Zoro", "Leader", "[DON!! x1] [Your Turn]", "All of your Characters gain +1000 power.", "DON!!", "OP01-001"))
+        assertEquals(OnePieceKey("OP01-001").id, key!!.id)
+        // A text-heavy card with a lone "DON!!" line but no readable code isn't treated as a DON!! card.
+        val wordy = frame("Nami", "Character", "Straw Hat Crew", "[On Play] Look at 5 cards", "Counter", "DON!!", "Trigger Draw 1 card")
+        assertTrue(CardTextParser.parse(wordy).none { it.key is OnePieceDonKey })
+    }
+
     @Test fun riftboundSetAndNumber() {
         val key = best(frame("Ahri, Inquisitive", "Unit", "OGN • 119/298")) as RiftboundKey
         assertEquals("OGN", key.set); assertEquals("119", key.number); assertEquals("298", key.total)
@@ -184,6 +199,8 @@ class CardTextParserTest {
         assertEquals(listOf("Charizard ex"), named.nameHints)
         assertEquals(OnePieceKey("OP01-001").id, CardTextParser.parseTyped("op01-001", null)!!.id)
         assertEquals(OnePieceKey("P-001").id, CardTextParser.parseTyped("P-001", Game.ONE_PIECE)!!.id)
+        assertTrue(CardTextParser.parseTyped("DON!!", null) is OnePieceDonKey)
+        assertTrue(CardTextParser.parseTyped("don", Game.ONE_PIECE) is OnePieceDonKey)
         val rb = CardTextParser.parseTyped("OGN 179/298", null) as RiftboundKey
         assertEquals("OGN", rb.set); assertEquals("179", rb.number); assertEquals("298", rb.total)
         val rb2 = CardTextParser.parseTyped("ogn-7", null) as RiftboundKey

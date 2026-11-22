@@ -11,8 +11,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `SnapStack-1.2.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `SnapStack-1.2.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `SnapStack-1.3.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `SnapStack-1.3.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
@@ -72,14 +72,25 @@ found ("Found in 12 ms · on device").
   Prices refresh daily in the background.
 * **Import a pasted list** (`4 Lightning Bolt`, `2x 123/193`, `LOB-EN001`).
 * **Backup / restore** to a JSON file, and **CSV export**.
-* **Import from Ripfolio:** Settings → *Import from Ripfolio or a CSV* (or the button on the empty
-  Portfolio). See below.
+* **Import from list or CSV:** paste a card list, or choose a CSV or another collection app's
+  backup file. Find it in Settings, on the empty Portfolio, or under Search → Import list or CSV.
+  See below.
+* **One Piece DON!! cards:** the scanner recognises the DON!! logo. You then pick which DON!! card
+  it is from a filterable list, with cards from the set you're opening shown first.
 
-## Moving over from Ripfolio
+## Import from list or CSV
+
+**Settings → Import from list or CSV** gives you two options:
+
+* **Paste a list,** one card per line: `4 Lightning Bolt`, `2x 123/193`, `OP01-001`,
+  `LOB-EN001 x3`, `DON!!`. Pick a game for lines that are only a name. Pasted CSV text works too.
+* **Choose a file:** a CSV, a plain-text list, a SnapStack backup, or another collection app's
+  backup. The format is detected automatically.
+
+### Moving over from Ripfolio
 
 1. In Ripfolio, go to **Settings → Back up**. That saves a file named `ripfolio-backup-YYYY-MM-DD.json`.
-2. In SnapStack, go to **Settings → Import from Ripfolio or a CSV** and pick that file. Any file
-   type is accepted, and the format is detected automatically.
+2. In SnapStack, go to **Import from list or CSV → Choose a file** and pick that file.
 3. Each card is matched by game, set, number and name against the same databases the scanner
    uses, then priced and added to your collection. Quantity, condition, foil, purchase price,
    grading (company, grade, slab value, cert #) and the date added are carried over.
@@ -111,9 +122,20 @@ All of these are free public APIs and need no key:
 | One Piece | [tcgcsv.com](https://tcgcsv.com) (daily TCGplayer catalog) | TCGplayer market, Normal / Foil |
 | Riftbound | [tcgcsv.com](https://tcgcsv.com) (daily TCGplayer catalog) | TCGplayer market, Normal / Foil |
 
-One Piece and Riftbound have no free search API, so their card lists are downloaded a set at a
-time. Scanning a card downloads its set automatically. Name search works on the downloaded sets,
-and the Search tab has a one-tap **Download all sets** button.
+One Piece and Riftbound card lists are downloaded a set at a time. Scanning a card downloads its
+set automatically, and the Search tab has a one-tap **Download all sets** button for offline use.
+
+**Backup sources** keep things working when a source is down or missing data:
+
+| When… | SnapStack falls back to |
+| --- | --- |
+| A Pokémon, Magic, Yu-Gi-Oh! or Lorcana card has no price, or its source is unreachable | TCGplayer's catalog (tcgcsv.com), matched by set, number and name |
+| TCGdex is down, or doesn't have a brand-new Pokémon set yet | TCGplayer's catalog, using the set code printed on the card (`PAL`, `DLR`…) |
+| Searching One Piece by name | [optcgapi.com](https://optcgapi.com), so you don't need every set downloaded |
+| tcgcsv.com can't price a One Piece card | optcgapi.com market prices |
+
+I couldn't find a second Riftbound source that responded reliably, so Riftbound uses TCGplayer's
+catalog only.
 
 SnapStack is not affiliated with any card game publisher, TCGplayer, or the data providers.
 

@@ -228,6 +228,12 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
         notify(Topic.SETS)
     }
 
+    /** Marks a game's sets as not downloaded so they are fetched again (cards already saved are kept). */
+    fun resetSetsCached(game: Game) {
+        writableDatabase.execSQL("UPDATE sets SET cached_at=0 WHERE game=?", arrayOf(game.id))
+        notify(Topic.SETS)
+    }
+
     fun getSets(game: Game): List<CardSet> =
         readableDatabase.rawQuery("SELECT * FROM sets WHERE game=? ORDER BY release DESC", arrayOf(game.id))
             .use { c -> buildList { while (c.moveToNext()) add(c.toSet()) } }

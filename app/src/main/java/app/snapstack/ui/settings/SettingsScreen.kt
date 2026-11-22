@@ -66,6 +66,7 @@ import app.snapstack.BuildConfig
 import app.snapstack.data.ScanSpeed
 import app.snapstack.data.Settings
 import app.snapstack.ui.importer.rememberImportPicker
+import app.snapstack.ui.importer.rememberImportSheet
 import app.snapstack.model.CardSet
 import app.snapstack.model.Game
 import app.snapstack.work.PriceRefreshWorker
@@ -162,6 +163,7 @@ fun SettingsScreen() {
         uri?.let { vm.backup(it, context) }
     }
     val importFile = rememberImportPicker()
+    val importSheet = rememberImportSheet()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) {
         message?.let { snackbar.showSnackbar(it); vm.message.value = null }
@@ -233,9 +235,9 @@ fun SettingsScreen() {
             backupLauncher.launch("snapstack-backup-${LocalDate.now()}.json")
         }
         Action(
-            "Import from Ripfolio or a CSV",
-            "Pick a Ripfolio backup (ripfolio-backup-….json) or a CSV export. Adds the cards to your collection.",
-        ) { importFile() }
+            "Import from list or CSV",
+            "Paste a card list, or choose a CSV or another collection app's backup file. Adds the cards to your collection.",
+        ) { importSheet.open() }
         Action("Restore a SnapStack backup", "Replaces your current collection with the backup's contents") { importFile() }
         Action("Export CSV", "Spreadsheet of every copy with prices") { csvLauncher.launch("snapstack-collection-${LocalDate.now()}.csv") }
 
@@ -244,7 +246,8 @@ fun SettingsScreen() {
             "SnapStack ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no tracking. " +
                 "Card text is read on-device with ML Kit; only the card number is sent to look a card up.\n\n" +
                 "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
-                "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound). " +
+                "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound). Backups when a source is down or has no price: " +
+                "the TCGplayer catalog (Pokémon, Magic, Yu-Gi-Oh!, Lorcana) and optcgapi.com (One Piece search and prices). " +
                 "Prices are TCGplayer market prices in USD where available. SnapStack is not affiliated with, endorsed or " +
                 "sponsored by any card game publisher, TCGplayer, or the data providers. All card names and images are " +
                 "property of their respective owners.",

@@ -15,6 +15,7 @@ import app.snapstack.model.normalizeNumber
 import app.snapstack.scan.LorcanaKey
 import app.snapstack.scan.MagicKey
 import app.snapstack.scan.NameKey
+import app.snapstack.scan.OnePieceDonKey
 import app.snapstack.scan.OnePieceKey
 import app.snapstack.scan.PokemonKey
 import app.snapstack.scan.RiftboundKey
@@ -79,6 +80,21 @@ class CollectionImporter(
     }
 
     /** Reads the picked file and either asks to replace (SnapStack backup) or starts importing. */
+    /** Imports pasted text: a list (one card per line) or CSV. [game] is used for lines that don't say. */
+    fun startText(text: String, game: Game?) {
+        if (_state.value is ImportUi.Running || text.isBlank()) return
+        _state.value = ImportUi.Running("Reading list", 0, 0)
+        scope.launch {
+            try {
+                runImport(ImportParsing.parsePasted(text, game), null)
+            } catch (e: ImportException) {
+                _state.value = ImportUi.Failed(e.message ?: "Import failed")
+            } catch (e: Exception) {
+                _state.value = ImportUi.Failed("Import failed: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
     fun start(uri: Uri) {
         if (_state.value is ImportUi.Running) return
         val name = displayName(uri)
@@ -88,6 +104,10 @@ class CollectionImporter(
                 val text = readText(uri)
                 when (ImportParsing.detect(text)) {
                     ImportFormat.SNAPSTACK -> _state.value = ImportUi.ConfirmReplace(uri, name)
+                    // A plain text file: one card per line.
+                    ImportFormat.UNKNOWN -> if (!text.trimStart().startsWith("{") && !text.trimStart().startsWith("[") && text.none { it == '\u0000' }) {
+                        runImport(ImportParsing.parseList(text, null), name)
+                    } else runImport(ImportParsing.parse(text), name)
                     else -> runImport(ImportParsing.parse(text), name)
                 }
             } catch (e: ImportException) {
@@ -133,7 +153,12 @@ class CollectionImporter(
         val skipped = LinkedHashMap(parsed.skipped)
         val (supported, unsupported) = parsed.rows.partition { it.game != null }
         unsupported.groupBy { it.gameLabel ?: "unknown game" }.forEach { (label, rows) ->
-            skipped["cards from $label (not supported yet)"] = rows.sumOf { it.qty }
+            val what = when (label) {
+                ImportParsing.NO_GAME -> label
+                "unknown game" -> "cards with no game named (add a Game column, or pick a game when pasting)"
+                else -> "cards from $label (not supported yet)"
+            }
+            skipped[what] = rows.sumOf { it.qty }
         }
         if (supported.isEmpty()) {
             _state.value = ImportUi.Done(
@@ -225,6 +250,10 @@ class CollectionImporter(
 
     private suspend fun match(row: ImportRow): Card? {
         val game = row.game ?: return null
+        // Pasted lines were already parsed into a key ("123/193", "OP01-001", "Lightning Bolt"…).
+        row.key?.let { key ->
+            return runCatching { cards.resolve(key).card }.getOrNull()
+        }
         val number = row.number ?: ImportParsing.numberFromName(row.name)
         val base = ImportParsing.baseName(row.name)
         val candidates = LinkedHashMap<String, Card>()
@@ -238,6 +267,17 @@ class CollectionImporter(
         suspend fun fromSet(set: CardSet, n: String) {
             if (set.cachedAt == 0L) runCatching { cards.ensureSetCached(set) }
             withContext(Dispatchers.IO) { db.findBySetNumber(game, set.code, n) }.forEach { candidates.putIfAbsent(it.id, it) }
+        }
+
+        /** Catalog games use TCGplayer names, as Ripfolio does: look the name up inside the matched set. */
+        suspend fun fromSetByName(set: CardSet) {
+            if (set.cachedAt == 0L) runCatching { cards.ensureSetCached(set) }
+            withContext(Dispatchers.IO) { db.cardsInSet(game, set.code) }
+                .map { it to TextMatch.nameScore(it.name, listOf(row.name)) }
+                .filter { it.second >= 0.75 }
+                .sortedByDescending { it.second }
+                .take(8)
+                .forEach { candidates.putIfAbsent(it.first.id, it.first) }
         }
 
         when (game) {
@@ -258,10 +298,19 @@ class CollectionImporter(
                 val set = bestSet(game, row.setName)
                 if (set != null && number != null) tryKey(LorcanaKey(set.code, ImportParsing.numberOnly(number).trimStart('0').ifEmpty { "0" }))
             }
-            Game.ONE_PIECE -> number?.let { tryKey(OnePieceKey(it.uppercase(Locale.US).substringBefore(' '))) }
-            Game.RIFTBOUND -> number?.let { num ->
+            Game.ONE_PIECE -> {
                 val set = bestSet(game, row.setName)
-                tryKey(RiftboundKey(set?.abbreviation, ImportParsing.numberOnly(num), ImportParsing.totalOf(num)))
+                when {
+                    row.name.trim().startsWith("DON", ignoreCase = true) -> tryKey(OnePieceDonKey(set?.code))
+                    number != null && Regex("^(OP|ST|EB|PRB)\\d{2}-\\d{3}|^P-\\d{3}").containsMatchIn(number.uppercase(Locale.US)) ->
+                        tryKey(OnePieceKey(number.uppercase(Locale.US).substringBefore(' ')))
+                }
+                set?.let { fromSetByName(it) }
+            }
+            Game.RIFTBOUND -> {
+                val set = bestSet(game, row.setName)
+                number?.let { num -> tryKey(RiftboundKey(set?.abbreviation, ImportParsing.numberOnly(num), ImportParsing.totalOf(num))) }
+                set?.let { fromSetByName(it) }
             }
         }
 

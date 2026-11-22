@@ -4,7 +4,9 @@ import app.snapstack.data.net.Http
 import app.snapstack.data.source.LorcanaSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.OptcgApi
 import app.snapstack.data.source.TcgCsvSource
+import app.snapstack.data.source.TcgPlayerFallback
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.CardSet
 import app.snapstack.model.Game
@@ -80,6 +82,47 @@ class LiveSourcesTest {
         val repriced = src.fetchPrices(zoro)
         assertEquals(zoro.size, repriced.size)
         println("onepiece ${zoro.map { it.name to it.prices }} sets=${sets.size} op01=${cards.size}")
+    }
+
+    @Test fun onePieceDonCards() = runBlocking {
+        val src = TcgCsvSource(http, Game.ONE_PIECE, TcgCsvSource.ONE_PIECE_CATEGORY, "op")
+        val promos = src.fetchSets().first { it.name == "One Piece Promotion Cards" }
+        val dons = src.fetchSetCards(promos).cards.filter { it.number == TcgCsvSource.DON_NUMBER }
+        assertTrue("promo DON!! cards: ${dons.size}", dons.size > 20)
+        assertTrue(dons.any { it.name.contains("Gold") })
+        println("onepiece DON!! in promos: ${dons.size}, e.g. ${dons.take(3).map { it.name to it.prices }}")
+    }
+
+    @Test fun tcgplayerBackupPrices() = runBlocking {
+        val fb = TcgPlayerFallback(http)
+        val pkm = PokemonSource(http)
+        val garganacl = pkm.fetchSetCards(pkm.fetchSets().first { it.code == "sv02" }).cards.first { it.number == "123" }
+        val p1 = fb.pricesFor(garganacl)
+        assertTrue("pokemon backup prices $p1", p1 != null && p1.isNotEmpty())
+        val bolt = MagicSource(http).fetchBySetNumber("m10", "146")!!
+        val p2 = fb.pricesFor(bolt)
+        assertTrue("magic backup prices $p2", p2 != null && p2.isNotEmpty())
+        val ariel = LorcanaSource(http).fetchBySetNumber("1", "1")!!
+        val p3 = fb.pricesFor(ariel)
+        assertTrue("lorcana backup prices $p3", p3 != null && p3.isNotEmpty())
+        val bewd = YugiohSource(http).fetchBySetNumber("", "LOB-EN001")!!
+        val p4 = fb.pricesFor(bewd)
+        assertTrue("yugioh backup prices $p4", p4 != null && p4.isNotEmpty())
+        // Identify a Pokémon card from the printed set code alone (no TCGdex involved).
+        val found = fb.findPokemon("PAL", emptyList(), "123", "193")
+        assertTrue(found.any { it.name == "Garganacl" && it.id.startsWith("pkm:tcgp:") })
+        val repriced = fb.refreshOwn(found)
+        assertTrue(repriced.isNotEmpty())
+        println("tcgplayer backup: pkm=$p1 mtg(${bolt.name})=$p2 lor=$p3 ygo=$p4 found=${found.map { it.id to it.name }}")
+    }
+
+    @Test fun optcgapiBackup() = runBlocking {
+        val api = OptcgApi(http)
+        val hits = api.search("zoro")
+        assertTrue(hits.any { it.code == "OP01-001" })
+        val versions = api.versions("OP01-001")
+        assertTrue(versions.size >= 2 && versions.all { it.code == "OP01-001" })
+        println("optcgapi zoro hits=${hits.size} versions=${versions.map { it.name to it.price }}")
     }
 
     @Test fun riftbound() = runBlocking {

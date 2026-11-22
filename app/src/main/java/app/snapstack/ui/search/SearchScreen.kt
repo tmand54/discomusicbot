@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,16 +85,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
-data class ImportLine(val raw: String, val qty: Int, val card: Card? = null, val done: Boolean = false)
-
 class SearchViewModel : ViewModel() {
     private val graph = AppGraph.instance
     val game = MutableStateFlow(Game.fromId(graph.settings.scanGame.value) ?: Game.POKEMON)
     val results = MutableStateFlow<List<Card>?>(null)
     val loading = MutableStateFlow(false)
     val error = MutableStateFlow<String?>(null)
-    val importLines = MutableStateFlow<List<ImportLine>>(emptyList())
-    val importing = MutableStateFlow(false)
     /** For catalog games (One Piece, Riftbound): sets on device vs. all sets. */
     val catalog = MutableStateFlow<Pair<Int, Int>?>(null)
     val catalogProgress = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -144,40 +141,6 @@ class SearchViewModel : ViewModel() {
         }
     }
 
-    /** Resolves a pasted list ("4 Lightning Bolt", "2x 123/193", "LOB-EN001") line by line, in parallel. */
-    fun runImport(text: String) {
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }.take(500)
-        val qtyPattern = Regex("^(\\d{1,3})\\s*[xX×]?\\s+(.+)$")
-        val parsed = lines.map { line ->
-            qtyPattern.find(line)?.let { m -> ImportLine(m.groupValues[2], m.groupValues[1].toInt().coerceAtLeast(1)) } ?: ImportLine(line, 1)
-        }
-        importLines.value = parsed
-        viewModelScope.launch {
-            importing.value = true
-            val gate = Semaphore(4)
-            parsed.mapIndexed { i, line ->
-                async {
-                    gate.withPermit {
-                        val key = CardTextParser.parseTyped(line.raw, game.value)
-                        val card = key?.let { runCatching { graph.cards.resolve(it).card }.getOrNull() }
-                        importLines.value = importLines.value.toMutableList().also { it[i] = line.copy(card = card, done = true) }
-                    }
-                }
-            }.awaitAll()
-            importing.value = false
-        }
-    }
-
-    fun saveImport(onDone: (Int) -> Unit) {
-        val items = importLines.value.mapNotNull { l ->
-            l.card?.let { CollectionItem(cardId = it.id, variant = it.defaultVariant, qty = l.qty, priceAtAdd = it.price(null)) }
-        }
-        viewModelScope.launch {
-            graph.collection.add(items)
-            importLines.value = emptyList()
-            onDone(items.sumOf { it.qty })
-        }
-    }
 }
 
 @Composable
@@ -194,7 +157,7 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Search", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             TextButton(onClick = { showImport = true }) {
-                Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, null); Spacer(Modifier.width(6.dp)); Text("Import list")
+                Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, null); Spacer(Modifier.width(6.dp)); Text("Import list or CSV")
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -229,8 +192,12 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
             ) {
                 Column(Modifier.padding(14.dp)) {
                     Text(
-                        "${game.label} cards are searched on your phone — $have of $all sets downloaded. " +
-                            "Scanning works without this: each set downloads the first time you scan a card from it.",
+                        if (game == Game.ONE_PIECE) {
+                            "One Piece search works online. $have of $all sets are on your phone — download them all to search and scan offline too."
+                        } else {
+                            "${game.label} cards are searched on your phone — $have of $all sets downloaded. " +
+                                "Scanning works without this: each set downloads the first time you scan a card from it."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -275,73 +242,6 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
             }
         }
     }
-    // The picker lives here (not in the sheet) so it survives the sheet closing.
-    val importFile = app.snapstack.ui.importer.rememberImportPicker()
-    if (showImport) ImportSheet(vm, onDismiss = { showImport = false }, onImportFile = { showImport = false; importFile() })
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ImportSheet(vm: SearchViewModel, onDismiss: () -> Unit, onImportFile: () -> Unit) {
-    val game by vm.game.collectAsState()
-    val lines by vm.importLines.collectAsState()
-    val importing by vm.importing.collectAsState()
-    var text by remember { mutableStateOf("") }
-    var saved by remember { mutableStateOf<Int?>(null) }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Import a list · ${game.label}", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                TextButton(onClick = onImportFile) { Text("From a file") }
-            }
-            Text(
-                "Have a Ripfolio backup or a CSV? Use \"From a file\" — it brings in every game at once.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "One card per line. Quantities optional: \"4 Lightning Bolt\", \"2x 123/193\", \"LOB-EN001\", \"MKM 123\".",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            if (lines.isEmpty()) {
-                OutlinedTextField(
-                    value = text, onValueChange = { text = it }, minLines = 6, maxLines = 12,
-                    modifier = Modifier.fillMaxWidth(), placeholder = { Text("Paste your list here") },
-                )
-                Spacer(Modifier.height(12.dp))
-                saved?.let { Text("Added $it cards to your collection.", color = MaterialTheme.colorScheme.secondary) }
-                Button(onClick = { vm.runImport(text) }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Look up cards") }
-            } else {
-                val done = lines.count { it.done }
-                val found = lines.count { it.card != null }
-                if (importing) LinearProgressIndicator(progress = { done.toFloat() / lines.size }, modifier = Modifier.fillMaxWidth())
-                Text("$found of ${lines.size} matched", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp))
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    items(lines) { l ->
-                        ListItem(
-                            leadingContent = {
-                                when {
-                                    !l.done -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    l.card != null -> Icon(Icons.Outlined.CheckCircle, null, tint = MaterialTheme.colorScheme.secondary)
-                                    else -> Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
-                                }
-                            },
-                            headlineContent = { Text("${l.qty}× ${l.card?.title ?: l.raw}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            supportingContent = { Text(l.card?.let { "${it.setName} ${it.displayNumber} · ${money(it.price(null))}" } ?: if (l.done) "Not found" else "…", maxLines = 1) },
-                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { vm.importLines.value = emptyList() }, modifier = Modifier.weight(1f)) { Text("Back") }
-                    Button(
-                        onClick = { vm.saveImport { saved = it; text = "" } },
-                        enabled = !importing && found > 0, modifier = Modifier.weight(1.4f),
-                    ) { Text("Add $found to collection") }
-                }
-            }
-        }
-    }
+    val importSheet = app.snapstack.ui.importer.rememberImportSheet()
+    LaunchedEffect(showImport) { if (showImport) { importSheet.open(game); showImport = false } }
 }

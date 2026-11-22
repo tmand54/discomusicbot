@@ -110,6 +110,27 @@ class ImportParsingTest {
         assertTrue(runCatching { ImportParsing.parseCsv("foo,bar\n1,2") }.exceptionOrNull() is ImportException)
     }
 
+    @Test fun pastedList() {
+        val p = ImportParsing.parseList("4 Lightning Bolt\n2x 123/193\nOP01-001\nLOB-EN001 x3\nDON!!\n// comment\nCharizard", null)
+        assertEquals(5 + 1, p.rows.size)
+        assertEquals(4, p.rows[0].qty); assertNull(p.rows[0].game) // a bare name needs a game
+        assertEquals(ImportParsing.NO_GAME, p.rows[0].gameLabel)
+        assertEquals(2, p.rows[1].qty); assertEquals(Game.POKEMON, p.rows[1].game)
+        assertEquals(Game.ONE_PIECE, p.rows[2].game)
+        assertEquals(3, p.rows[3].qty); assertEquals(Game.YUGIOH, p.rows[3].game)
+        assertTrue(p.rows[4].key is app.snapstack.scan.OnePieceDonKey)
+        val magic = ImportParsing.parseList("4 Lightning Bolt", Game.MAGIC).rows.single()
+        assertEquals(Game.MAGIC, magic.game); assertEquals(4, magic.qty)
+    }
+
+    @Test fun pastedTextCanBeCsv() {
+        val csv = ImportParsing.parsePasted("Name,Set,Quantity\nPikachu,Base Set,2\n", Game.POKEMON)
+        assertEquals(ImportFormat.CSV, csv.format)
+        assertEquals(Game.POKEMON, csv.rows.single().game)
+        val list = ImportParsing.parsePasted("2 Pikachu, the electric mouse", Game.POKEMON)
+        assertEquals(ImportFormat.LIST, list.format)
+    }
+
     @Test fun namesNumbersAndPrintings() {
         assertEquals("Charizard ex", ImportParsing.baseName("Charizard ex - 199/165"))
         assertEquals("Lightning Bolt", ImportParsing.baseName("Lightning Bolt (Borderless)"))

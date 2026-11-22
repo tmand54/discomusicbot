@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.snapstack.model.Condition
 import app.snapstack.model.Game
+import app.snapstack.data.source.TcgCsvSource
 import app.snapstack.model.Variants
 import app.snapstack.scan.ItemStatus
 import app.snapstack.scan.SessionItem
@@ -118,23 +119,42 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
 
             val card = item.card
             if (card != null) {
+                val isDon = card.game == Game.ONE_PIECE && card.number == TcgCsvSource.DON_NUMBER
+                var donFilter by remember(item.uid) { mutableStateOf("") }
                 if (!item.confident || item.alternatives.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!item.confident) Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
                         Text(
-                            if (!item.confident) " Not sure — is it one of these?" else "Other matches",
+                            when {
+                                isDon -> " Which DON!! card is it?"
+                                !item.confident -> " Not sure — is it one of these?"
+                                else -> "Other matches"
+                            },
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
+                    if (isDon) OutlinedTextField(
+                        value = donFilter, onValueChange = { donFilter = it }, singleLine = true,
+                        placeholder = { Text("Filter: gold, Luffy, manga, OP05…") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    )
+                    val shown = if (isDon) {
+                        item.alternatives.filter { alt ->
+                            donFilter.isBlank() || alt.name.contains(donFilter.trim(), true) || alt.setName.contains(donFilter.trim(), true)
+                        }.take(40)
+                    } else item.alternatives.take(10)
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item.alternatives.take(10).forEach { alt ->
-                            Column(Modifier.width(72.dp).clip(RoundedCornerShape(8.dp)).clickable { vm.session.chooseAlternative(item.uid, alt) }) {
-                                CardImage(alt.imageSmall, Modifier.width(72.dp), corner = 6.dp)
+                        shown.forEach { alt ->
+                            Column(Modifier.width(if (isDon) 88.dp else 72.dp).clip(RoundedCornerShape(8.dp)).clickable { vm.session.chooseAlternative(item.uid, alt) }) {
+                                CardImage(alt.imageSmall, Modifier.fillMaxWidth(), corner = 6.dp)
+                                if (isDon) Text(donLabel(alt.name), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(alt.setName, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                if (isDon) Text(money(alt.price(null)), style = MaterialTheme.typography.labelSmall.merge(Numeric), color = MaterialTheme.colorScheme.secondary)
                             }
                         }
                     }
+                    if (isDon && shown.isEmpty()) Text("No DON!! card matches \"$donFilter\".", style = MaterialTheme.typography.bodySmall)
                     if (!item.confident) TextButton(onClick = { vm.session.markConfirmed(item.uid) }) { Text("It's correct") }
                 }
 
@@ -177,6 +197,10 @@ fun ItemSheet(vm: ScannerViewModel, uid: Long, single: Boolean, onDismiss: () ->
         }
     }
 }
+
+/** "DON!! Card (Gold) (Promo)" → "Gold · Promo"; the plain card → "Plain". */
+private fun donLabel(name: String): String =
+    Regex("[(\\[]([^)\\]]+)[)\\]]").findAll(name).joinToString(" · ") { it.groupValues[1] }.ifEmpty { "Plain" }
 
 @Composable
 private fun QtyRow(qty: Int, onQty: (Int) -> Unit) {

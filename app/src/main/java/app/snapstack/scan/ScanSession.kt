@@ -76,7 +76,8 @@ class ScanSession(private val repo: CardRepository, private val scope: Coroutine
                     variant = pickVariant(card), from = r.from, resolveMs = System.currentTimeMillis() - scannedAt,
                 )
             }
-            if (mergeDuplicate(uid)) return@launch
+            // Each DON!! card is picked by hand, so don't fold several DON!! scans into one row.
+            if (key !is OnePieceDonKey && mergeDuplicate(uid)) return@launch
             val priced = repo.ensurePriced(card)
             if (priced !== card) update(uid) {
                 copy(card = priced, variant = if (variantChosen) variant else pickVariant(priced))

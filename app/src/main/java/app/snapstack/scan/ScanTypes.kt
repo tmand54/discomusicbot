@@ -73,6 +73,16 @@ data class OnePieceKey(val code: String) : ScanKey {
     override val label get() = code.uppercase(Locale.US)
 }
 
+/**
+ * A One Piece DON!! card. They print no number or name, so the scanner only knows "a DON!! card";
+ * [setHint] (the set of the last One Piece card scanned) puts that set's DON!! cards first.
+ */
+data class OnePieceDonKey(val setHint: String? = null) : ScanKey {
+    override val game get() = Game.ONE_PIECE
+    override val id get() = "op|DON!!"
+    override val label get() = "DON!!"
+}
+
 /** Riftbound prints "OGN • 179/298"; the set code is optional (it is not always readable). */
 data class RiftboundKey(val set: String?, val number: String, val total: String?) : ScanKey {
     override val game get() = Game.RIFTBOUND

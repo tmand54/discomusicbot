@@ -5,7 +5,9 @@ import app.snapstack.data.db.Database
 import app.snapstack.data.source.CardSource
 import app.snapstack.data.source.MagicSource
 import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.OptcgApi
 import app.snapstack.data.source.TcgCsvSource
+import app.snapstack.data.source.TcgPlayerFallback
 import app.snapstack.data.source.YugiohSource
 import app.snapstack.model.Card
 import app.snapstack.model.CardSet
@@ -15,6 +17,7 @@ import app.snapstack.scan.CardTextParser
 import app.snapstack.scan.LorcanaKey
 import app.snapstack.scan.MagicKey
 import app.snapstack.scan.NameKey
+import app.snapstack.scan.OnePieceDonKey
 import app.snapstack.scan.OnePieceKey
 import app.snapstack.scan.PokemonKey
 import app.snapstack.scan.PokemonPromoKey
@@ -56,6 +59,10 @@ class CardRepository(
     private val settings: Settings,
     private val scope: CoroutineScope,
     val sources: Map<Game, CardSource>,
+    /** Second source for Pokémon / Magic / Yu-Gi-Oh! / Lorcana prices, and Pokémon lookups (TCGplayer catalog). */
+    private val tcgplayer: TcgPlayerFallback? = null,
+    /** Second source for One Piece: online name search and backup prices. */
+    private val optcg: OptcgApi? = null,
 ) {
     private val memory = LruCache<String, Resolution>(1000)
     private val inflight = ConcurrentHashMap<String, Deferred<Resolution>>()
@@ -71,6 +78,10 @@ class CardRepository(
     init {
         // Teach the parser every Riftbound set code we already know about.
         scope.launch { runCatching { registerRiftboundCodes() } }
+        // One Piece sets downloaded before DON!! support lack their DON!! cards: fetch them again on demand.
+        if (settings.getLong("op_don_v1") == 0L) scope.launch {
+            runCatching { db.resetSetsCached(Game.ONE_PIECE); settings.putLong("op_don_v1", 1L) }
+        }
     }
 
     private fun registerRiftboundCodes() =
@@ -112,7 +123,42 @@ class CardRepository(
         is PokemonPromoKey -> resolvePokemonPromo(key)
         is NameKey -> resolveName(key)
         is OnePieceKey -> resolveOnePiece(key)
+        is OnePieceDonKey -> resolveDon(key)
         is RiftboundKey -> resolveRiftbound(key)
+    }
+
+    /**
+     * DON!! cards carry no number or name, so every DON!! card is a candidate: the scanned pack's set
+     * first (from [OnePieceDonKey.setHint]), then promos and recent sets. Always offered for review.
+     */
+    private suspend fun resolveDon(key: OnePieceDonKey): Resolution {
+        val hint = key.setHint
+        var dons = db.findByNumber(Game.ONE_PIECE, TcgCsvSource.DON_NUMBER)
+        var from = ResolvedFrom.DEVICE
+        if (dons.isEmpty() || (hint != null && dons.none { it.setCode == hint })) {
+            from = ResolvedFrom.NETWORK
+            ensureSetList(Game.ONE_PIECE)
+            val sets = db.getSets(Game.ONE_PIECE)
+            val wanted = buildList {
+                hint?.let { h -> sets.firstOrNull { it.code == h }?.let(::add) }
+                addAll(sets.filter { it.name.contains("Promotion", true) })
+                addAll(
+                    sets.filter { !it.name.contains("Release Event", true) && !it.name.contains("Promo", true) }
+                        .sortedByDescending { it.releaseDate ?: "" }.take(4)
+                )
+            }.distinctBy { it.code }
+            downloadSets(wanted)
+            dons = db.findByNumber(Game.ONE_PIECE, TcgCsvSource.DON_NUMBER)
+        }
+        if (dons.isEmpty()) return Resolution(null)
+        val sorted = dons.sortedWith(
+            compareBy<Card>(
+                { if (hint != null && it.setCode == hint) 0 else 1 },
+                { TcgCsvSource.specialness(it.name) },
+                { it.price(null) ?: Double.MAX_VALUE },
+            )
+        )
+        return Resolution(sorted.first(), sorted.drop(1), confident = false, from = from)
     }
 
     private fun abbrevKey(a: String?) = a?.uppercase(Locale.US)?.filter { it.isLetterOrDigit() }
@@ -214,7 +260,24 @@ class CardRepository(
         return Resolution(card)
     }
 
+    /** TCGdex first; if it fails or doesn't know the card (e.g. a set released this week), TCGplayer's catalog. */
     private suspend fun resolvePokemon(key: PokemonKey): Resolution {
+        val primary = runCatching { resolvePokemonPrimary(key) }
+        primary.getOrNull()?.takeIf { it.card != null }?.let { return it }
+        val fallback = tcgplayer ?: return primary.getOrThrow()
+        val setNames = runCatching {
+            val total = key.total?.filter(Char::isDigit)?.toIntOrNull()
+            (key.abbrev?.let { db.setsByAbbrev(Game.POKEMON, it) }.orEmpty() +
+                total?.let { db.setsByPrintedTotal(Game.POKEMON, it) }.orEmpty()).map { it.name }.distinct()
+        }.getOrDefault(emptyList())
+        if (key.abbrev == null && setNames.isEmpty()) return primary.getOrThrow()
+        val found = runCatching { fallback.findPokemon(key.abbrev, setNames, key.number, key.total) }.getOrDefault(emptyList())
+        if (found.isEmpty()) return primary.getOrThrow()
+        db.upsertCards(found)
+        return rankByName(found, key.nameHints).copy(from = ResolvedFrom.NETWORK)
+    }
+
+    private suspend fun resolvePokemonPrimary(key: PokemonKey): Resolution {
         ensureSetList(Game.POKEMON)
         val candidates = LinkedHashMap<String, CardSet>()
         key.abbrev?.let { a -> db.setsByAbbrev(Game.POKEMON, a).forEach { candidates[it.code] = it } }
@@ -347,7 +410,7 @@ class CardRepository(
         val job = priceJobs.computeIfAbsent(card.id) {
             scope.async(start = CoroutineStart.LAZY) {
                 try {
-                    runCatching { source(card.game).fetchPrices(listOf(card)).firstOrNull() }.getOrNull()?.also {
+                    pricesFor(card.game, listOf(card)).firstOrNull()?.also {
                         db.upsertCards(listOf(it), keepPrices = false)
                     }
                 } finally {
@@ -358,13 +421,58 @@ class CardRepository(
         return job.await() ?: card
     }
 
+    /**
+     * Prices from the game's main source; cards it can't price (no price listed, or the source is down)
+     * are tried against the second source. Cards that came from TCGplayer's catalog are priced there.
+     */
+    private suspend fun pricesFor(game: Game, cards: List<Card>): List<Card> {
+        val (own, regular) = cards.partition { it.id.contains(":tcgp:") }
+        val out = ArrayList<Card>()
+        if (own.isNotEmpty()) out += runCatching { tcgplayer?.refreshOwn(own) }.getOrNull().orEmpty()
+        if (regular.isNotEmpty()) {
+            val primary = runCatching { source(game).fetchPrices(regular) }.getOrDefault(emptyList())
+            val priced = primary.filter { it.prices.isNotEmpty() }
+            out += priced
+            val missing = regular.filter { c -> priced.none { it.id == c.id } }
+            if (missing.isNotEmpty()) out += backupPrices(missing, primary)
+        }
+        return out
+    }
+
+    private suspend fun backupPrices(missing: List<Card>, primaryResults: List<Card>): List<Card> = coroutineScope {
+        val gate = Semaphore(4)
+        val now = System.currentTimeMillis()
+        missing.map { c ->
+            async {
+                gate.withPermit {
+                    val card = primaryResults.firstOrNull { it.id == c.id } ?: c
+                    val prices = when {
+                        tcgplayer?.supports(card.game) == true -> runCatching { tcgplayer.pricesFor(card) }.getOrNull()
+                        card.game == Game.ONE_PIECE && optcg != null && card.number != TcgCsvSource.DON_NUMBER ->
+                            runCatching { optcgPrice(card) }.getOrNull()
+                        else -> null
+                    }
+                    prices?.let { card.copy(prices = it, variants = (card.variants + it.keys).distinct(), pricedAt = now) }
+                }
+            }
+        }.awaitAll().filterNotNull()
+    }
+
+    /** One Piece backup price: the optcgapi printing with this code whose name matches ("(Parallel)" etc.). */
+    private suspend fun optcgPrice(card: Card): Map<String, Double>? {
+        val hit = optcg?.versions(card.number)?.filter { it.price != null }
+            ?.maxByOrNull { TextMatch.nameScore(it.name, listOf(card.name)) }
+            ?.takeIf { TextMatch.nameScore(it.name, listOf(card.name)) >= 0.75 } ?: return null
+        return mapOf((card.defaultVariant ?: "normal") to hit.price!!)
+    }
+
     /** Refreshes prices for many cards (collection/wantlist) and records today's price history. */
     suspend fun refreshPrices(cards: List<Card>, onProgress: (Int, Int) -> Unit = { _, _ -> }): List<Card> {
         val updated = ArrayList<Card>()
         var done = 0
         for ((game, list) in cards.groupBy { it.game }) {
             for (chunk in list.chunked(60)) {
-                val fresh = runCatching { source(game).fetchPrices(chunk) }.getOrDefault(emptyList())
+                val fresh = pricesFor(game, chunk)
                 db.upsertCards(fresh, keepPrices = false)
                 updated += fresh
                 done += chunk.size
@@ -383,7 +491,24 @@ class CardRepository(
         if (q.isEmpty()) return emptyList()
         if (isCatalogGame(game)) {
             val byNumber = db.findByNumber(game, q, prefix = true)
-            return (byNumber + db.searchLocal(game, q, 150)).distinctBy { it.id }
+            val local = (byNumber + db.searchLocal(game, q, 150)).distinctBy { it.id }
+            val api = optcg
+            if (game != Game.ONE_PIECE || api == null) return local
+            // Online name search: optcgapi gives the card codes, the TCGplayer catalog gives the printings.
+            val codes = runCatching { api.search(q) }.getOrDefault(emptyList())
+                .map { it.code }.filter { Regex("^((OP|ST|EB|PRB)\\d{2}|P)-\\d{3}$").matches(it) }.distinct().take(16)
+            val online = coroutineScope {
+                val gate = Semaphore(3)
+                codes.map { code ->
+                    async {
+                        gate.withPermit {
+                            runCatching { resolve(OnePieceKey(code)) }.getOrNull()
+                                ?.let { r -> listOfNotNull(r.card) + r.alternatives }.orEmpty()
+                        }
+                    }
+                }.awaitAll().flatten()
+            }.filter { c -> c.name.contains(q, ignoreCase = true) || TextMatch.nameScore(c.name, listOf(q)) >= 0.8 }
+            return (local + online).distinctBy { it.id }
         }
         val results = source(game).search(q)
         if (game == Game.POKEMON && results.any { it.setName == it.setCode }) {

@@ -57,7 +57,9 @@ class TcgCsvSource(
                 p.optJSONArray("extendedData")?.let { e ->
                     for (j in 0 until e.length()) e.optJSONObject(j)?.let { ext[it.optString("name")] = it.optString("value") }
                 }
-                val number = ext["Number"]?.trim()?.takeIf { it.isNotEmpty() } ?: continue // sealed product
+                val isDon = ext["CardType"] == "DON!!" || ext["Rarity"] == "DON!!"
+                // DON!! cards print no number; anything else without one is sealed product.
+                val number = ext["Number"]?.trim()?.takeIf { it.isNotEmpty() } ?: if (isDon) DON_NUMBER else continue
                 val id = p.getLong("productId")
                 val image = p.optStr("imageUrl")
                 val prices = priceMap[id] ?: emptyMap()
@@ -102,7 +104,7 @@ class TcgCsvSource(
             async {
                 val prices = runCatching { fetchGroupPrices(groupId) }.getOrNull() ?: return@async emptyList()
                 inSet.mapNotNull { c ->
-                    val pid = c.id.substringAfter(':').toLongOrNull() ?: return@mapNotNull null
+                    val pid = c.id.substringAfterLast(':').toLongOrNull() ?: return@mapNotNull null
                     val p = prices[pid] ?: return@mapNotNull null
                     c.copy(prices = p, variants = (c.variants + p.keys).distinct(), pricedAt = now)
                 }
@@ -114,6 +116,8 @@ class TcgCsvSource(
     override suspend fun search(query: String): List<Card> = emptyList()
 
     companion object {
+        /** Stored as the "number" of every One Piece DON!! card, so they can be looked up together. */
+        const val DON_NUMBER = "DON!!"
         const val ONE_PIECE_CATEGORY = 68
         const val RIFTBOUND_CATEGORY = 89
 

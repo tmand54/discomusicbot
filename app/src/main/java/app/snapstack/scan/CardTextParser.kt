@@ -42,6 +42,8 @@ object CardTextParser {
     )
     private val ygoPasscode = Regex("(?<![0-9])([0-9]{8})(?![0-9])")
     private val onePieceCode = Regex("(?<![A-Za-z0-9])(OP|ST|EB|PRB)\\s?($LOOSE_DIGIT{2})\\s?-\\s?($LOOSE_DIGIT{3})(?![0-9])")
+    /** A line that is just the DON!! logo ("DON!!", OCR'd as "DON!", "DONI!", "D0N!!"…). */
+    private val donLine = Regex("^\\W{0,3}D\\s?[O0]\\s?N\\s?[!Il1|]{1,3}\\W{0,3}$")
     private val onePiecePromo = Regex("(?<![A-Za-z0-9])P\\s?-\\s?($LOOSE_DIGIT{3})(?![0-9])")
     private val riftboundPrefix = Regex("([A-Z]{3})\\s*[•·.*\\-‧∙●]?\\s*$")
     private val riftboundPublic = Regex("(?<![A-Za-z0-9])([A-Z]{3})\\s?-\\s?($LOOSE_DIGIT{3}[a-z]?\\*?)(?![0-9/])")
@@ -191,6 +193,16 @@ object CardTextParser {
             }
         }
 
+        // ---- One Piece DON!! card: the logo on its own line, little other text, and no card code.
+        if (allowed(Game.ONE_PIECE) && out.none { it.key is OnePieceKey }) {
+            val logo = lines.firstOrNull { donLine.matches(it.text.trim()) }
+            val wordyLines = lines.count { it !== logo && nameLike.containsMatchIn(it.text) }
+            if (logo != null && wordyLines <= 4) {
+                val score = 0.6 + 0.15 * ctxOf(Game.ONE_PIECE) + if (game == Game.ONE_PIECE) 0.15 else 0.0
+                out += Detection(OnePieceDonKey(), score, logo.box)
+            }
+        }
+
         // ---- Riftbound public code without total: "OGN-179".
         if (allowed(Game.RIFTBOUND)) lines.forEach { line ->
             for (m in riftboundPublic.findAll(line.text)) {
@@ -257,6 +269,7 @@ object CardTextParser {
         val upper = text.uppercase(Locale.US)
 
         if (game == null || game == Game.ONE_PIECE) {
+            if (Regex("^DON\\s*!{0,2}( CARD)?$").matches(upper)) return OnePieceDonKey()
             onePieceCode.find(upper)?.let { m ->
                 return OnePieceKey("${m.groupValues[1]}${digitsLoose(m.groupValues[2])}-${digitsLoose(m.groupValues[3])}")
             }
