@@ -140,6 +140,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
     val lastRefresh by vm.lastRefresh.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     var range by remember { mutableStateOf(Range.M3) }
+    val importFile = app.snapstack.ui.importer.rememberImportPicker()
 
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -170,6 +171,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
                     Modifier.padding(top = 48.dp),
                 ) {
                     Button(onClick = onScan) { Icon(Icons.Filled.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("Start scanning") }
+                    androidx.compose.material3.TextButton(onClick = importFile) { Text("Import from Ripfolio or a CSV") }
                 }
             }
             return@LazyColumn

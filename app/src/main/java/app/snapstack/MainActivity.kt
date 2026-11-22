@@ -44,6 +44,7 @@ import app.snapstack.ui.card.CardDetailScreen
 import app.snapstack.ui.collection.CollectionScreen
 import app.snapstack.ui.collection.SetDetailScreen
 import app.snapstack.ui.home.PortfolioScreen
+import app.snapstack.ui.importer.ImportDialogs
 import app.snapstack.ui.scan.ScanScreen
 import app.snapstack.ui.search.SearchScreen
 import app.snapstack.ui.settings.SettingsScreen
@@ -166,6 +167,7 @@ private fun AppRoot(pendingCard: String?, onPendingHandled: () -> Unit) {
                     SetDetailScreen(game, code, onBack = { nav.popBackStack() }, onOpenCard = { nav.navigate(Routes.card(it)) })
                 }
             }
+            ImportDialogs()
         }
     }
 }

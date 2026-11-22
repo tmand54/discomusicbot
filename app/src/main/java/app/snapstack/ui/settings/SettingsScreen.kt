@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +65,7 @@ import app.snapstack.AppGraph
 import app.snapstack.BuildConfig
 import app.snapstack.data.ScanSpeed
 import app.snapstack.data.Settings
+import app.snapstack.ui.importer.rememberImportPicker
 import app.snapstack.model.CardSet
 import app.snapstack.model.Game
 import app.snapstack.work.PriceRefreshWorker
@@ -123,15 +127,6 @@ class SettingsViewModel : ViewModel() {
         busy.value = false
     }
 
-    fun restore(uri: android.net.Uri, context: android.content.Context) = viewModelScope.launch {
-        busy.value = true
-        message.value = runCatching {
-            val n = context.contentResolver.openInputStream(uri)!!.use { graph.collection.restore(it) }
-            "Restored $n collection entries"
-        }.getOrElse { "Restore failed: ${it.message}" }
-        busy.value = false
-    }
-
     fun exportCsv(uri: android.net.Uri, context: android.content.Context) = viewModelScope.launch {
         busy.value = true
         message.value = runCatching {
@@ -166,8 +161,10 @@ fun SettingsScreen() {
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { vm.backup(it, context) }
     }
-    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { vm.restore(it, context) }
+    val importFile = rememberImportPicker()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.let { snackbar.showSnackbar(it); vm.message.value = null }
     }
     val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         uri?.let { vm.exportCsv(it, context) }
@@ -180,12 +177,9 @@ fun SettingsScreen() {
     }
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifGranted = it }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState())) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
-        message?.let {
-            Text(it, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp))
-        }
-        if (busy) CircularProgressIndicator(Modifier.padding(16.dp))
 
         Group("Scanning")
         ScanSpeed.entries.forEach { sp ->
@@ -238,9 +232,11 @@ fun SettingsScreen() {
         Action("Back up collection", "Save everything to a file you can restore on any phone") {
             backupLauncher.launch("snapstack-backup-${LocalDate.now()}.json")
         }
-        Action("Restore from backup", "Replaces your current collection with the file's contents") {
-            restoreLauncher.launch(arrayOf("application/json", "application/octet-stream", "text/plain"))
-        }
+        Action(
+            "Import from Ripfolio or a CSV",
+            "Pick a Ripfolio backup (ripfolio-backup-….json) or a CSV export. Adds the cards to your collection.",
+        ) { importFile() }
+        Action("Restore a SnapStack backup", "Replaces your current collection with the backup's contents") { importFile() }
         Action("Export CSV", "Spreadsheet of every copy with prices") { csvLauncher.launch("snapstack-collection-${LocalDate.now()}.csv") }
 
         Group("About")
@@ -257,6 +253,10 @@ fun SettingsScreen() {
             modifier = Modifier.padding(16.dp),
         )
         Spacer(Modifier.size(24.dp))
+    }
+
+    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    if (busy) CircularProgressIndicator(Modifier.align(Alignment.Center))
     }
 
     if (offline) OfflineSheet(vm, onDismiss = { offline = false; vm.loadCounts() })

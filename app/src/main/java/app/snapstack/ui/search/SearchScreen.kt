@@ -275,12 +275,14 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
             }
         }
     }
-    if (showImport) ImportSheet(vm, onDismiss = { showImport = false })
+    // The picker lives here (not in the sheet) so it survives the sheet closing.
+    val importFile = app.snapstack.ui.importer.rememberImportPicker()
+    if (showImport) ImportSheet(vm, onDismiss = { showImport = false }, onImportFile = { showImport = false; importFile() })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ImportSheet(vm: SearchViewModel, onDismiss: () -> Unit) {
+private fun ImportSheet(vm: SearchViewModel, onDismiss: () -> Unit, onImportFile: () -> Unit) {
     val game by vm.game.collectAsState()
     val lines by vm.importLines.collectAsState()
     val importing by vm.importing.collectAsState()
@@ -289,7 +291,14 @@ private fun ImportSheet(vm: SearchViewModel, onDismiss: () -> Unit) {
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding()) {
-            Text("Import a list · ${game.label}", style = MaterialTheme.typography.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Import a list · ${game.label}", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = onImportFile) { Text("From a file") }
+            }
+            Text(
+                "Have a Ripfolio backup or a CSV? Use \"From a file\" — it brings in every game at once.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 "One card per line. Quantities optional: \"4 Lightning Bolt\", \"2x 123/193\", \"LOB-EN001\", \"MKM 123\".",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,

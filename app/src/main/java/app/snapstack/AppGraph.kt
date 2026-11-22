@@ -5,6 +5,7 @@ import app.snapstack.data.CardRepository
 import app.snapstack.data.CollectionRepository
 import app.snapstack.data.Settings
 import app.snapstack.data.db.Database
+import app.snapstack.data.importer.CollectionImporter
 import app.snapstack.data.net.Http
 import app.snapstack.data.source.LorcanaSource
 import app.snapstack.data.source.MagicSource
@@ -39,6 +40,7 @@ class AppGraph(val app: Application) {
     }
     val collection: CollectionRepository by lazy { CollectionRepository(db, cards, settings) }
     val session: ScanSession by lazy { ScanSession(cards, appScope) }
+    val importer: CollectionImporter by lazy { CollectionImporter(app, db, cards, collection, appScope) }
 
     companion object {
         lateinit var instance: AppGraph
