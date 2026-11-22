@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- back card -->
+    <group android:rotation="-12" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#FF5B4BC4"
+            android:pathData="M40,30h26a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4h-26a4,4 0,0 1,-4 -4v-38a4,4 0,0 1,4 -4z" />
+    </group>
+    <!-- front card with holo gradient -->
+    <group android:rotation="8" android:pivotX="54" android:pivotY="54">
+        <path android:pathData="M42,29h26a4,4 0,0 1,4 4v40a4,4 0,0 1,-4 4h-26a4,4 0,0 1,-4 -4v-40a4,4 0,0 1,4 -4z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear"
+                    android:startX="38" android:startY="29" android:endX="72" android:endY="77">
+                    <item android:offset="0" android:color="#FF5EF2D6" />
+                    <item android:offset="0.5" android:color="#FF8C7BFF" />
+                    <item android:offset="1" android:color="#FFFF7AC6" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <!-- lightning bolt -->
+        <path android:fillColor="#FF0E1020"
+            android:pathData="M58,36 L46,55 L54,55 L50,70 L64,48 L56,48 Z" />
+    </group>
+</vector>

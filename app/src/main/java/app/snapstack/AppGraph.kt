@@ -1,0 +1,48 @@
+package app.snapstack
+
+import android.app.Application
+import app.snapstack.data.CardRepository
+import app.snapstack.data.CollectionRepository
+import app.snapstack.data.Settings
+import app.snapstack.data.db.Database
+import app.snapstack.data.net.Http
+import app.snapstack.data.source.LorcanaSource
+import app.snapstack.data.source.MagicSource
+import app.snapstack.data.source.PokemonSource
+import app.snapstack.data.source.YugiohSource
+import app.snapstack.model.Game
+import app.snapstack.scan.ScanSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+
+/** Hand-rolled dependency graph: one instance of each service for the whole app. */
+class AppGraph(val app: Application) {
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val settings = Settings(app)
+    val db = Database(app)
+    val http = Http(app.cacheDir, "SnapStack/${BuildConfig.VERSION_NAME} (Android; personal collection app)")
+
+    val cards: CardRepository by lazy {
+        CardRepository(
+            db, settings, appScope,
+            mapOf(
+                Game.POKEMON to PokemonSource(http) { code -> db.getSet(Game.POKEMON, code)?.name },
+                Game.MAGIC to MagicSource(http),
+                Game.YUGIOH to YugiohSource(http),
+                Game.LORCANA to LorcanaSource(http),
+            ),
+        )
+    }
+    val collection: CollectionRepository by lazy { CollectionRepository(db, cards, settings) }
+    val session: ScanSession by lazy { ScanSession(cards, appScope) }
+
+    companion object {
+        lateinit var instance: AppGraph
+            private set
+
+        fun init(app: Application) {
+            instance = AppGraph(app)
+        }
+    }
+}
