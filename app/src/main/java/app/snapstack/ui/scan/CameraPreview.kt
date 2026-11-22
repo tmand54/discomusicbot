@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.flow.Flow
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -41,6 +42,8 @@ fun CameraPreview(
     torch: Boolean,
     onCapture: (ImageCapture?) -> Unit,
     modifier: Modifier = Modifier,
+    /** Each emission refocuses on the scan guide (sent when the picture stays blurry). */
+    focusRequests: Flow<Unit>? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -69,7 +72,8 @@ fun CameraPreview(
                     ResolutionSelector.Builder()
                         .setAspectRatioStrategy(fourThree)
                         .setResolutionStrategy(
-                            ResolutionStrategy(Size(1600, 1200), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
+                            // Only the guide area is read, so a sharper frame costs little extra OCR time.
+                            ResolutionStrategy(Size(1920, 1440), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
                         )
                         .build()
                 )
@@ -112,6 +116,20 @@ fun CameraPreview(
 
     LaunchedEffect(camera, torch) {
         camera?.let { c -> if (c.cameraInfo.hasFlashUnit()) c.cameraControl.enableTorch(torch) }
+    }
+
+    LaunchedEffect(camera, focusRequests) {
+        val c = camera ?: return@LaunchedEffect
+        focusRequests?.collect {
+            if (previewView.width == 0) return@collect
+            // Focus where the card sits: the guide's centre, slightly above the middle of the view.
+            val point = previewView.meteringPointFactory.createPoint(previewView.width / 2f, previewView.height * 0.46f)
+            runCatching {
+                c.cameraControl.startFocusAndMetering(
+                    FocusMeteringAction.Builder(point).setAutoCancelDuration(3, TimeUnit.SECONDS).build()
+                )
+            }
+        }
     }
 
     AndroidView(

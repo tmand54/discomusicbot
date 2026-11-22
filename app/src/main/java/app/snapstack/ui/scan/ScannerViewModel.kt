@@ -19,21 +19,31 @@ import app.snapstack.data.ScanMode
 import app.snapstack.data.ScanSpeed
 import app.snapstack.model.Game
 import app.snapstack.model.RipSession
+import app.snapstack.model.Card
 import app.snapstack.scan.Box
+import app.snapstack.scan.Detection
+import app.snapstack.scan.OnePieceDonKey
+import app.snapstack.scan.TextMatch
 import app.snapstack.scan.CardTextParser
 import app.snapstack.scan.FrameVoter
 import app.snapstack.scan.ItemStatus
 import app.snapstack.scan.OcrFrame
 import app.snapstack.scan.ScanKey
 import app.snapstack.scan.TextAnalyzer
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
-data class LiveDetection(val label: String, val box: Box?, val frameW: Int, val frameH: Int, val game: Game)
+data class LiveDetection(
+    val label: String, val box: Box?, val frameW: Int, val frameH: Int, val game: Game,
+    /** The read matches a card on the phone and its printed name: accepted after a single frame. */
+    val verified: Boolean = false,
+)
 
 data class ScanUi(
     val mode: ScanMode = ScanMode.RAPID,
@@ -51,6 +61,8 @@ data class ScanUi(
     val binderLive: Int = 0,
     val lastUndo: List<Long> = emptyList(),
     val flash: Long = 0,
+    /** The camera image is blurry (card moving or lens refocusing): those frames are skipped. */
+    val blurry: Boolean = false,
 )
 
 class ScannerViewModel(app: Application) : AndroidViewModel(app) {
@@ -72,10 +84,29 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val voter = FrameVoter(requiredVotes = settings.speed().votes)
     private val parseExecutor = Executors.newSingleThreadExecutor()
-    val analyzer = TextAnalyzer(parseExecutor, ::onFrame)
-    private var lastFrameAt = 0L
     @Volatile private var viewW = 0
     @Volatile private var viewH = 0
+    val analyzer = TextAnalyzer(
+        parseExecutor,
+        roiProvider = { w, h ->
+            val binder = _ui.value.mode == ScanMode.BINDER
+            Guide.inFrame(viewW, viewH, w, h, binder, if (binder) 0.04f else 0.08f)
+        },
+        onBlur = ::onBlur,
+        onFrame = ::onFrame,
+    )
+    private var lastFrameAt = 0L
+
+    /** Asks the camera to refocus on the guide when the picture stays blurry. */
+    private val _focusRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val focusRequests: SharedFlow<Unit> = _focusRequests
+    @Volatile private var blurSince = 0L
+    @Volatile private var lastFocusRequest = 0L
+
+    /** Offline lookups of recent reads (key id → cards on the phone), so each frame costs ~nothing. */
+    private val peekCache = object : LinkedHashMap<String, Pair<Long, List<Card>>>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, List<Card>>>?) = size > 64
+    }
 
     /** The preview's size on screen, so the scanner can ignore text outside the guide. */
     fun setViewSize(w: Int, h: Int) {
@@ -89,6 +120,34 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         analyzer.paused = false
+        warmUp(_ui.value.game)
+    }
+
+    /** Set lists the resolver needs are fetched as soon as the scanner opens. */
+    private fun warmUp(game: Game?) {
+        graph.cards.warmUp(
+            game?.let { listOf(it) } ?: listOf(Game.POKEMON, Game.ONE_PIECE, Game.DRAGON_BALL, Game.RIFTBOUND)
+        )
+    }
+
+    private fun onBlur(blurry: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        blurSince = if (blurry) (if (blurSince == 0L) now else blurSince) else 0L
+        _ui.update { it.copy(blurry = blurry) }
+    }
+
+    private fun maybeRefocus(now: Long) {
+        if (blurSince != 0L && now - blurSince > 900 && now - lastFocusRequest > 2500) {
+            lastFocusRequest = now
+            _focusRequests.tryEmit(Unit)
+        }
+    }
+
+    private fun peek(key: ScanKey, now: Long): List<Card> {
+        peekCache[key.id]?.let { (at, cards) -> if (now - at < 3000) return cards }
+        val cards = graph.cards.peek(key)
+        peekCache[key.id] = now to cards
+        return cards
     }
 
     // ------------------------------------------------------------------ live frames (background thread)
@@ -108,27 +167,54 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
+        maybeRefocus(now)
         val inside = region(frame, false, 0.1f)
-        val best = CardTextParser.parse(frame, state.game)
-            .firstOrNull { it.score >= MIN_SCORE && Guide.contains(inside, it.box) }
+        val candidates = CardTextParser.parse(frame, state.game)
+            .filter { it.score >= MIN_SCORE && Guide.contains(inside, it.box) }
+            .take(3)
+        val hints = frame.lines.map { it.text }
+        val nameLines = hints.count { line -> line.count { it.isLetter() } >= 3 }
+
+        // Check the reads against cards already on the phone: a number whose card name is also printed
+        // here is almost certainly right, so it needn't wait for more frames. A number that points at a
+        // different card than the printed name is a likely misread, so it must hold for longer.
+        var best: Detection? = null
+        var verified = false
+        var suspicious = false
+        for (d in candidates) {
+            val known = peek(d.key, now)
+            val match = known.isNotEmpty() && known.any { TextMatch.cardNameScore(it.name, hints) >= 0.75 }
+            if (match) { best = d; verified = true; break }
+            if (best == null) {
+                best = d
+                suspicious = known.isNotEmpty() && nameLines >= 3 && d.key !is OnePieceDonKey
+            }
+        }
+        val pick = best
         _ui.update {
             it.copy(
                 fps = fps, ocrMs = ocr,
-                detection = best?.let { d -> LiveDetection(d.key.label, d.box, frame.width, frame.height, d.key.game) },
+                detection = pick?.let { d -> LiveDetection(d.key.label, d.box, frame.width, frame.height, d.key.game, verified) },
             )
         }
-        val commitId = voter.offer(best?.key?.id, now) ?: return
-        if (best != null && best.key.id == commitId) commit(best.key)
+        val votes = state.speed.votes
+        val required = when {
+            verified -> (votes - 1).coerceAtLeast(1)
+            suspicious -> votes + 1
+            else -> votes
+        }
+        val commitId = voter.offer(pick?.key?.id, now, required) ?: return
+        if (pick != null && pick.key.id == commitId) commit(pick.key, hints)
     }
 
-    private fun commit(scanned: ScanKey) {
+    private fun commit(scanned: ScanKey, hints: List<String> = emptyList()) {
         val key = if (scanned is app.snapstack.scan.OnePieceDonKey && scanned.setHint == null) {
             // DON!! cards don't say which set they're from: assume the pack/deck being scanned.
             scanned.copy(setHint = session.items.value.firstOrNull { it.card?.game == Game.ONE_PIECE && it.card.number != "DON!!" }?.card?.setCode)
         } else scanned
         lastCommittedId = key.id
         feedback()
-        val uid = session.add(key)
+        val uid = session.add(key, hints)
         _ui.update { it.copy(flash = SystemClock.elapsedRealtime(), message = null) }
         if (_ui.value.mode == ScanMode.SINGLE) {
             analyzer.paused = true
@@ -148,6 +234,7 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
     fun setGame(game: Game?) {
         settings.scanGame.value = game?.id ?: "auto"
         voter.reset()
+        warmUp(game)
         _ui.update { it.copy(game = game, detection = null) }
     }
 
@@ -243,7 +330,7 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         voter.markCommitted(best.key.id, SystemClock.elapsedRealtime())
-        commit(best.key)
+        commit(best.key, frame.lines.map { it.text })
     }
 
     fun saveSession(onDone: (Int) -> Unit) {

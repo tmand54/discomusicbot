@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class ScanSpeed(val label: String, val votes: Int, val description: String) {
     TURBO("Turbo", 1, "Commit on the first clean read. Fastest; best with good light."),
-    BALANCED("Balanced", 2, "Two matching frames (~0.1–0.2 s). Recommended."),
-    CAREFUL("Careful", 3, "Three matching frames. For glare, sleeves or toploaders."),
+    BALANCED("Balanced", 2, "Two matching frames — or one when the read matches a card on your phone and its printed name. Recommended."),
+    CAREFUL("Careful", 3, "Three matching frames (two for a verified read). For glare, sleeves or toploaders."),
 }
 
 enum class ScanMode(val label: String) { RAPID("Rapid"), SINGLE("Single"), BINDER("Binder") }

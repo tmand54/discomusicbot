@@ -11,15 +11,19 @@ package app.snapstack.scan
  */
 class FrameVoter(
     var requiredVotes: Int = 2,
-    private val window: Int = 4,
+    private val window: Int = 5,
     private val goneMs: Long = 1200,
 ) {
     private val recent = ArrayDeque<String?>()
     private val lastSeen = HashMap<String, Long>()
     private val committed = LinkedHashSet<String>()
 
-    /** Offer one frame's best key (or null). Returns the key id to commit, if any. */
-    fun offer(id: String?, now: Long): String? {
+    /**
+     * Offer one frame's best key (or null). Returns the key id to commit, if any.
+     * [required] overrides the vote count for this read (fewer when it matched a known card,
+     * more when it looked suspicious).
+     */
+    fun offer(id: String?, now: Long, required: Int = requiredVotes): String? {
         committed.removeAll { now - (lastSeen[it] ?: 0L) > goneMs }
         recent.addLast(id)
         while (recent.size > window) recent.removeFirst()
@@ -27,7 +31,7 @@ class FrameVoter(
         lastSeen[id] = now
         if (id in committed) return null
         val votes = recent.count { it == id }
-        if (votes < requiredVotes.coerceAtLeast(1)) return null
+        if (votes < required.coerceAtLeast(1)) return null
         committed.clear()
         committed += id
         return id

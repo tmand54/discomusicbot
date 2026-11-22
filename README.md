@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.4.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.4.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.5.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.5.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 The app used to be called SnapStack. Its internal app id (`app.snapstack`) hasn't changed, so
@@ -34,6 +34,19 @@ Scanning is built to keep cards moving, without a pause between them:
   printed collector number (`PAL EN 123/193`, `0123 M · MKM • EN`, `LOB-EN001`,
   `12/204 • EN • 5`, `OP01-001`, `OGN • 179/298`, `FB01-001`, `BT22-064`) straight from the camera feed at roughly 1600×1200, with no shutter press
   and no photo upload. The scanner also skips text outside the on-screen guide.
+* **Only the card is read.** Each frame, just the scan-guide area's luminance is copied into a
+  small grayscale buffer, with no colour conversion, and handed to OCR. That's about half the
+  frame, so a higher-resolution camera stream (1920×1440) gives sharper digits for about the same
+  OCR time. Text around the card is never read.
+* **Blurry frames are skipped.** A sub-millisecond sharpness check drops motion-blurred frames,
+  which cause most misreads, and the camera refocuses on the card if it stays blurry.
+* **Reads are checked against your card list.** Each read is looked up in the set lists already on
+  the phone. If the card that number points to has its name printed on the card in view, one frame
+  is enough (the guide box turns green). If the number points to a card with a different name, the
+  read needs an extra frame and is flagged for review.
+* **One-digit misreads are corrected.** If "128" is read but the name printed on the card is #123 in
+  that set, #123 is used. Corrected reads are never cached under the misread number.
+* **Set lists load when the scanner opens,** so the first card doesn't wait for them.
 * **Frame voting instead of a confirm tap.** A card is committed once its number reads the same
   in 1–3 frames (Turbo / Balanced / Careful). A card held in view is never counted twice. Take
   it away and show it again to count another copy.

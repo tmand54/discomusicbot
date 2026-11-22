@@ -58,13 +58,14 @@ class ScanSession(private val repo: CardRepository, private val scope: Coroutine
     var startedAt: Long = System.currentTimeMillis()
         private set
 
-    fun add(key: ScanKey): Long {
+    /** [hints]: the text OCR saw on the card, used to catch misreads (see [CardRepository.resolve]). */
+    fun add(key: ScanKey, hints: List<String> = emptyList()): Long {
         val uid = ids.getAndIncrement()
         val now = System.currentTimeMillis()
         if (_items.value.isEmpty()) startedAt = now
         _items.update { listOf(SessionItem(uid, key, ItemStatus.RESOLVING, now)) + it }
         scope.launch {
-            val r = repo.resolve(key)
+            val r = repo.resolve(key, hints)
             val card = r.card
             if (card == null) {
                 update(uid) { copy(status = if (r.error != null) ItemStatus.ERROR else ItemStatus.NOT_FOUND, error = r.error) }
@@ -72,7 +73,10 @@ class ScanSession(private val repo: CardRepository, private val scope: Coroutine
             }
             update(uid) {
                 copy(
-                    status = ItemStatus.READY, card = card, alternatives = r.alternatives, confident = r.confident,
+                    status = ItemStatus.READY, card = card, alternatives = r.alternatives,
+                    // Flag for review when a good read of the card doesn't show this card's name anywhere.
+                    confident = r.confident && !(key !is OnePieceDonKey && hints.size >= 3 &&
+                        TextMatch.cardNameScore(card.name, hints) < 0.35),
                     variant = pickVariant(card), from = r.from, resolveMs = System.currentTimeMillis() - scannedAt,
                 )
             }

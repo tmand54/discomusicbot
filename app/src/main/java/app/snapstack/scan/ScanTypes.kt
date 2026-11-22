@@ -144,6 +144,23 @@ object TextMatch {
         return best
     }
 
+    private val parenthetical = Regex("\\s*[(\\[][^)\\]]*[)\\]]")
+
+    /**
+     * How well a catalog card name is supported by the OCR lines, trying the useful parts too:
+     * "Roronoa Zoro (001)" → "Roronoa Zoro"; "Delver of Secrets // Insectile Aberration" → either face;
+     * "Ahri, Inquisitive" → "Ahri".
+     */
+    fun cardNameScore(name: String, hints: List<String>): Double {
+        if (hints.isEmpty()) return 0.0
+        val base = name.replace(parenthetical, "").trim()
+        val parts = (listOf(name, base) + base.split("//", ",", " - ").map { it.trim() }.filter { it.length >= 4 }).distinct()
+        return parts.maxOf { nameScore(it, hints) }
+    }
+
+    /** Edit distance between two short strings (card numbers). */
+    fun editDistance(a: String, b: String): Int = levenshtein(a, b)
+
     private fun levenshtein(a: String, b: String): Int {
         var prev = IntArray(b.length + 1) { it }
         var cur = IntArray(b.length + 1)

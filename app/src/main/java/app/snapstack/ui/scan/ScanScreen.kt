@@ -130,6 +130,7 @@ fun ScanScreen(onClose: () -> Unit, onOpenCard: (String) -> Unit) {
             CameraPreview(
                 vm.analyzer, ui.torch, onCapture = { capture = it },
                 modifier = Modifier.fillMaxSize().onSizeChanged { vm.setViewSize(it.width, it.height) },
+                focusRequests = vm.focusRequests,
             )
             ScanOverlay(ui, Modifier.fillMaxSize())
         } else {
@@ -245,7 +246,9 @@ private fun StatusLine(ui: ScanUi, showStats: Boolean) {
     val text = when {
         ui.snapping -> "Reading photo…"
         ui.mode == ScanMode.BINDER -> "${ui.binderLive} of ${ui.binderRows * ui.binderCols} pockets readable — tap the shutter"
+        ui.detection?.verified == true -> "✓ ${ui.detection.label}"
         ui.detection != null -> "Reading ${ui.detection.label}"
+        ui.blurry -> "Hold steady — focusing…"
         ui.mode == ScanMode.SINGLE -> "Hold one card inside the frame"
         else -> "Slide cards under the camera, one after another"
     }
@@ -304,7 +307,7 @@ private fun ScanOverlay(ui: ScanUi, modifier: Modifier) {
                 val dx = (size.width - fw * scale) / 2f; val dy = (size.height - fh * scale) / 2f
                 val pad = 8f
                 drawRoundRect(
-                    accent,
+                    if (ui.detection.verified) Gain else accent,
                     Offset(b.left * scale + dx - pad, b.top * scale + dy - pad),
                     Size(b.w * scale + 2 * pad, b.h * scale + 2 * pad),
                     CornerRadius(10f), style = Stroke(5f),

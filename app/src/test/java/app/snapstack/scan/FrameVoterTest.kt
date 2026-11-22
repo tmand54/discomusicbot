@@ -61,4 +61,16 @@ class FrameVoterTest {
         v.markCommitted("A", 0)
         assertNull(v.offer("A", 50))
     }
+
+    @Test fun verifiedReadCommitsOnOneFrame() {
+        val v = FrameVoter(requiredVotes = 2)
+        assertEquals("A", v.offer("A", 0, required = 1))
+    }
+
+    @Test fun suspiciousReadNeedsMoreFrames() {
+        val v = FrameVoter(requiredVotes = 2)
+        assertNull(v.offer("A", 0, required = 3))
+        assertNull(v.offer("A", 70, required = 3))
+        assertEquals("A", v.offer("A", 140, required = 3))
+    }
 }

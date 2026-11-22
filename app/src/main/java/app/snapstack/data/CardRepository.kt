@@ -48,6 +48,8 @@ data class Resolution(
     val confident: Boolean = card != null,
     val from: ResolvedFrom = ResolvedFrom.NETWORK,
     val error: String? = null,
+    /** The number was misread and fixed using the card name: never cache this under the read number. */
+    val corrected: Boolean = false,
 )
 
 /**
@@ -92,27 +94,84 @@ class CardRepository(
 
     // ------------------------------------------------------------------ resolve (scanner hot path)
 
-    suspend fun resolve(key: ScanKey): Resolution {
-        memory.get(key.id)?.let { return it.copy(from = ResolvedFrom.MEMORY) }
-        val job = inflight.computeIfAbsent(key.id) {
+    /**
+     * Looks a read up. [hints] are the other text lines OCR saw on the card: they let a misread digit be
+     * corrected by the card's printed name ("128" read, but the card says it's #123).
+     */
+    suspend fun resolve(key: ScanKey, hints: List<String> = emptyList()): Resolution {
+        memory.get(key.id)?.let { cached ->
+            // A cached answer is only reused when the name on this card agrees with it (or we can't tell).
+            if (hints.isEmpty() || cached.card == null || TextMatch.cardNameScore(cached.card.name, hints) >= 0.5) {
+                return cached.copy(from = ResolvedFrom.MEMORY)
+            }
+        }
+        val flightKey = if (hints.isEmpty()) key.id else key.id + "|h" + hints.hashCode()
+        val job = inflight.computeIfAbsent(flightKey) {
             scope.async(start = CoroutineStart.LAZY) {
                 try {
-                    val r = runCatching { doResolve(key) }.getOrElse { e ->
+                    val r = runCatching { doResolve(key, hints) }.getOrElse { e ->
                         Resolution(null, error = e.message ?: "Lookup failed")
                     }
-                    if (r.card != null && r.confident) memory.put(key.id, r)
+                    if (r.card != null && r.confident && !r.corrected) memory.put(key.id, r)
                     r
                 } finally {
-                    inflight.remove(key.id)
+                    inflight.remove(flightKey)
                 }
             }
         }
         return job.await()
     }
 
-    private suspend fun doResolve(key: ScanKey): Resolution = when (key) {
-        is MagicKey -> bySetNumber(Game.MAGIC, key.set, key.number)
-        is LorcanaKey -> bySetNumber(Game.LORCANA, key.set, key.number)
+    /**
+     * Instant, offline-only lookup used by the scanner on every frame: the cards already on the phone
+     * that this read points at. Never touches the network.
+     */
+    fun peek(key: ScanKey): List<Card> = runCatching {
+        when (key) {
+            is MagicKey -> db.findBySetNumber(Game.MAGIC, key.set, key.number)
+            is LorcanaKey -> db.findBySetNumber(Game.LORCANA, key.set, key.number)
+            is YugiohKey -> listOfNotNull(db.getCard("ygo:${key.code.uppercase(Locale.US)}"))
+            is YugiohPasscodeKey -> listOfNotNull(db.getCard("ygo:pc:${key.passcode}"))
+            is PokemonKey -> {
+                val total = key.total?.filter(Char::isDigit)?.toIntOrNull()
+                val sets = (key.abbrev?.let { db.setsByAbbrev(Game.POKEMON, it) }.orEmpty() +
+                    total?.let { db.setsByPrintedTotal(Game.POKEMON, it) }.orEmpty()).map { it.code }.distinct()
+                db.findByNumberInSets(Game.POKEMON, sets, key.number)
+            }
+            is PokemonPromoKey -> PokemonSource.promoSets[key.prefix]?.let { code ->
+                db.findByNumberInSets(Game.POKEMON, listOf(code), key.prefix + key.number) +
+                    db.findByNumberInSets(Game.POKEMON, listOf(code), key.number)
+            }.orEmpty()
+            is OnePieceKey -> db.findByNumber(Game.ONE_PIECE, key.code)
+            is DragonBallKey -> db.findByNumber(Game.DRAGON_BALL, key.code)
+            is RiftboundKey -> db.findByNumber(
+                Game.RIFTBOUND, if (key.total != null) "${key.number}/${key.total}" else key.number, prefix = key.total == null,
+            )
+            is OnePieceDonKey, is NameKey -> emptyList()
+        }
+    }.getOrDefault(emptyList())
+
+    /** Loads the set lists a scan session will need, so the first card doesn't wait for them. */
+    fun warmUp(games: Collection<Game>) {
+        scope.launch {
+            for (g in games) runCatching { ensureSetList(g) }
+        }
+    }
+
+    /** A card in [pool] one character away from the read [number] whose name is clearly on the card. */
+    private fun correctByName(pool: List<Card>, number: String, hints: List<String>): Card? {
+        if (hints.isEmpty()) return null
+        val n = normalizeNumber(number)
+        return pool.asSequence()
+            .filter { TextMatch.editDistance(normalizeNumber(it.number), n) == 1 }
+            .map { it to TextMatch.cardNameScore(it.name, hints) }
+            .filter { it.second >= 0.85 }
+            .maxByOrNull { it.second }?.first
+    }
+
+    private suspend fun doResolve(key: ScanKey, hints: List<String>): Resolution = when (key) {
+        is MagicKey -> bySetNumber(Game.MAGIC, key.set, key.number, hints)
+        is LorcanaKey -> bySetNumber(Game.LORCANA, key.set, key.number, hints)
         is YugiohKey -> resolveYugioh(key)
         is YugiohPasscodeKey -> {
             db.getCard("ygo:pc:${key.passcode}")?.let { Resolution(it, from = ResolvedFrom.DEVICE) }
@@ -120,7 +179,7 @@ class CardRepository(
                     db.upsertCards(listOf(it)); Resolution(it)
                 } ?: Resolution(null)
         }
-        is PokemonKey -> resolvePokemon(key)
+        is PokemonKey -> resolvePokemon(if (hints.isNotEmpty() && key.nameHints.isEmpty()) key.copy(nameHints = hints) else key)
         is PokemonPromoKey -> resolvePokemonPromo(key)
         is NameKey -> resolveName(key)
         is OnePieceKey -> resolveOnePiece(key)
@@ -259,14 +318,20 @@ class CardRepository(
         return Resolution(best, others.take(12), confident, from)
     }
 
-    private suspend fun bySetNumber(game: Game, setCode: String, number: String): Resolution {
-        db.findBySetNumber(game, setCode, number).firstOrNull()?.let {
-            return Resolution(it, from = ResolvedFrom.DEVICE)
+    private suspend fun bySetNumber(game: Game, setCode: String, number: String, hints: List<String> = emptyList()): Resolution {
+        val local = db.findBySetNumber(game, setCode, number).firstOrNull()
+        val result = local?.let { Resolution(it, from = ResolvedFrom.DEVICE) } ?: run {
+            val card = source(game).fetchBySetNumber(setCode, number)
+            card?.let { db.upsertCards(listOf(it)); prefetchSetAsync(game, it.setCode); Resolution(it) }
         }
-        val card = source(game).fetchBySetNumber(setCode, number) ?: return Resolution(null)
-        db.upsertCards(listOf(card))
-        prefetchSetAsync(game, card.setCode)
-        return Resolution(card)
+        // The name on the card disagrees with this number: look for the card one digit away that matches.
+        val card = result?.card
+        if (hints.isNotEmpty() && (card == null || TextMatch.cardNameScore(card.name, hints) < 0.4)) {
+            correctByName(db.cardsInSet(game, card?.setCode ?: setCode), number, hints)?.let { fixed ->
+                return Resolution(fixed, listOfNotNull(card), confident = true, from = ResolvedFrom.DEVICE, corrected = true)
+            }
+        }
+        return result ?: Resolution(null)
     }
 
     private suspend fun resolveYugioh(key: YugiohKey): Resolution {
@@ -310,6 +375,13 @@ class CardRepository(
 
         val sets = candidates.values.take(8)
         var matches = findInSets(sets, key.number)
+        // Misread digit? If the printed name points at a card one digit away in the same set(s), use it.
+        val readBest = matches.maxOfOrNull { TextMatch.cardNameScore(it.name, key.nameHints) } ?: 0.0
+        if (key.nameHints.isNotEmpty() && readBest < 0.5 && sets.isNotEmpty()) {
+            correctByName(sets.flatMap { db.cardsInSet(Game.POKEMON, it.code) }, key.number, key.nameHints)?.let { fixed ->
+                return Resolution(fixed, matches, confident = true, from = ResolvedFrom.DEVICE, corrected = true)
+            }
+        }
         if (matches.isEmpty() && key.number.any { it.isLetter() }) {
             // Subset numbering ("TG05", "GG12"): those cards live in sibling sets with their own totals.
             matches = db.findByNumberInSets(Game.POKEMON, db.getSets(Game.POKEMON).map { it.code }, key.number)
