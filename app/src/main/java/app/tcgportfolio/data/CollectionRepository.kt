@@ -62,6 +62,13 @@ class CollectionRepository(
 
     suspend fun update(item: CollectionItem) = io { db.updateItem(item); snapshotPortfolio() }
     suspend fun delete(id: Long) = io { db.deleteItem(id); snapshotPortfolio() }
+
+    /** Deletes every copy of these cards; returns the deleted copies for [restoreCopies]. */
+    suspend fun deleteCards(cardIds: Collection<String>): List<CollectionItem> = io {
+        db.deleteCopiesOf(cardIds).also { snapshotPortfolio() }
+    }
+
+    suspend fun restoreCopies(items: List<CollectionItem>) = io { db.restoreItems(items); snapshotPortfolio() }
     suspend fun setWanted(cardId: String, wanted: Boolean) = io { db.setWanted(cardId, wanted) }
     suspend fun saveAlert(alert: PriceAlert) = io { db.upsertAlert(alert) }
     suspend fun deleteAlert(id: Long) = io { db.deleteAlert(id) }

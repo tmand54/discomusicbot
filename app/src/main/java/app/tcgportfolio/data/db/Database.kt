@@ -324,6 +324,42 @@ class Database(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION
             """SELECT c.*, k.* FROM collection c JOIN cards k ON k.id = c.card_id ORDER BY c.added_at DESC""", null,
         ).use { cur -> buildList { while (cur.moveToNext()) add(OwnedCard(cur.toItem(), cur.toCard())) } }
 
+    /** Deletes every copy of these cards and returns the deleted rows, so [restoreItems] can undo it. */
+    fun deleteCopiesOf(cardIds: Collection<String>): List<CollectionItem> {
+        if (cardIds.isEmpty()) return emptyList()
+        val removed = mutableListOf<CollectionItem>()
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // SQLite allows at most 999 bound parameters per statement.
+            cardIds.distinct().chunked(500).forEach { chunk ->
+                val args = chunk.toTypedArray()
+                val marks = chunk.joinToString(",") { "?" }
+                db.rawQuery("SELECT * FROM collection WHERE card_id IN ($marks)", args).use { c -> while (c.moveToNext()) removed += c.toItem() }
+                db.delete("collection", "card_id IN ($marks)", args)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notify(Topic.COLLECTION)
+        return removed
+    }
+
+    /** Puts deleted rows back exactly as they were (same ids, rips, prices paid and notes). */
+    fun restoreItems(items: List<CollectionItem>) {
+        if (items.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            items.forEach { db.insertWithOnConflict("collection", null, it.toValues(includeId = true), SQLiteDatabase.CONFLICT_IGNORE) }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notify(Topic.COLLECTION)
+    }
+
     fun ownedFor(cardId: String): List<CollectionItem> =
         readableDatabase.rawQuery("SELECT * FROM collection WHERE card_id=? ORDER BY added_at DESC", arrayOf(cardId))
             .use { c -> buildList { while (c.moveToNext()) add(c.toItem()) } }

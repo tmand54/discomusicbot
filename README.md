@@ -12,8 +12,8 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.10.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.10.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Portfolio-1.11.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Portfolio-1.11.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
@@ -87,7 +87,8 @@ found ("Found in 12 ms · on device").
 * **Portfolio:** total value, P&L against purchase prices, a value-over-time chart, a breakdown
   by game, your most valuable cards, and changes since each card was added.
 * **Collection:** search, sort and filter by game, plus set progress (owned / total, with the
-  missing cards shown dimmed) and a wantlist.
+  missing cards shown dimmed) and a wantlist. Hold a card to start selecting, tap more (or
+  **Select all**), then **Delete** to remove them all at once, with Undo.
 * **Card details:** prices for each printing, price history, your copies, links to TCGplayer
   and eBay sold listings, and sharing.
 * **Copies:** each copy records printing, condition, quantity, purchase price, grading
