@@ -16,7 +16,7 @@ Settings → About → Privacy policy.
 ## App access
 
 **All functionality is available without special access.** There's no login. Reviewers can scan any
-card or use Search; graded values need a PriceCharting key, which is optional.
+card or use Search.
 
 ## Content rating (IARC questionnaire)
 

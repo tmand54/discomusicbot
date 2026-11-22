@@ -4,12 +4,12 @@ Everything in the app is ready for Play: it targets Android 16 (API 36), its 64-
 support 16 KB memory pages, it's shrunk with R8, and it builds a signed Android App Bundle (`.aab`).
 These are the steps only you can do.
 
-## 1. Decide the package name (permanent)
+## 1. Package name
 
-The app's package name is `app.snapstack`, from the project's first name. Once you upload to Play,
-it can never change. It appears in the Play URL (`play.google.com/store/apps/details?id=app.snapstack`)
-and nowhere else users normally see. Keep it, or change `applicationId` in `app/build.gradle.kts`
-before the first upload. If Play says the name is already taken, pick another one the same way.
+The app's package name is `app.tcgportfolio`. Once you upload to Play, it can never change. It
+appears in the Play URL (`play.google.com/store/apps/details?id=app.tcgportfolio`). If Play says the
+name is already taken, change `applicationId` in `app/build.gradle.kts` (for example to
+`com.yourname.tcgportfolio`) before the first upload.
 
 ## 2. Create your upload key (once, on your own computer)
 
@@ -105,7 +105,7 @@ one with the other. To switch without losing anything:
 
 ## Checklist
 
-- [ ] Package name decided
+- [ ] Package name accepted by Play on first upload
 - [ ] Upload key created and backed up
 - [ ] `keystore.properties` (or GitHub secrets) set up, `bundleRelease` succeeds
 - [ ] Privacy policy hosted, URL saved

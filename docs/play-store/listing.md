@@ -11,7 +11,7 @@ TCG Portfolio: Card Scanner
 ## Short description (max 80)
 
 ```
-Scan trading cards in a snap, value graded slabs and track your collection.
+Scan trading cards in a snap and track what your collection is worth.
 ```
 
 ## Full description (max 4000)
@@ -25,7 +25,6 @@ FAST SCANNING
 • Rapid mode: keep sliding cards under the camera and each one is added as it's recognized
 • Single mode: check each card before it's added
 • Binder mode: one photo of a binder page adds every pocket (2×2, 3×3, 3×4 or 4×4)
-• Slab mode: scan graded cards from PSA, Beckett (BGS), TAG, CGC and SGC. The label's grade, subgrades and cert number are read for you
 • Picks the right printing by comparing the artwork: parallels, alt arts, Judge and promo versions
 • Snap a full-resolution photo for tricky cards, or type the number
 
@@ -34,7 +33,6 @@ PRICES AND PORTFOLIO
 • Total value, profit and loss against what you paid, and value over time
 • Track pack openings: enter what you paid and see whether the rip came out ahead
 • Price alerts when a card rises above or falls below your target
-• Graded slab values from PriceCharting with your own API key, or enter your own
 
 COLLECTION
 • Set progress with the cards you're missing, plus a wantlist
@@ -49,7 +47,7 @@ Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, Disney Lorcana, One Piece Card Ga
 PRIVATE BY DESIGN
 No account, no ads and no tracking. Your collection stays on your phone. Card text is read on your phone; only the card number or name is sent to look the card up.
 
-TCG Portfolio is an independent app. It is not affiliated with, endorsed or sponsored by The Pokémon Company, Nintendo, Wizards of the Coast, Konami, Disney, Ravensburger, Bandai, Riot Games, TCGplayer, PriceCharting, PSA, Beckett, TAG, CGC or SGC. Card names and images belong to their respective owners.
+TCG Portfolio is an independent app. It is not affiliated with, endorsed or sponsored by The Pokémon Company, Nintendo, Wizards of the Coast, Konami, Disney, Ravensburger, Bandai, Riot Games or TCGplayer. Card names and images belong to their respective owners.
 ```
 
 ## Category and details
@@ -80,9 +78,8 @@ anything with personal details. Recommended order:
 2. **Scan session**: the review sheet with several cards and the total value.
 3. **Portfolio**: the total value, the chart and P&L.
 4. **Card details**: prices for each printing and the price history.
-5. **Slab mode**: a graded slab with "PSA 10" (or similar) read off the label.
-6. **Collection / set progress**: a set with owned and missing cards.
-7. **Binder mode**: a binder page with every pocket recognized.
+5. **Collection / set progress**: a set with owned and missing cards.
+6. **Binder mode**: a binder page with every pocket recognized.
 
 Tip: Play rejects screenshots that are mostly third-party logos or that imply endorsement. Keep the
 app's UI the focus, as the big scanner apps do.
@@ -91,9 +88,8 @@ app's UI the focus, as the big scanner apps do.
 
 ```
 First release on Google Play:
-• Rapid, Single, Binder and Slab scanning
+• Rapid, Single and Binder scanning
 • Pokémon, Magic, Yu-Gi-Oh!, Lorcana, One Piece, Riftbound and Dragon Ball
-• Graded slabs from PSA, BGS, TAG, CGC and SGC
 • Portfolio value, P&L, price history and price alerts
 • Import from a list, CSV or another app's backup
 ```

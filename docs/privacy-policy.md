@@ -12,7 +12,7 @@ analytics of its own. Your collection stays on your phone.
 * **Camera images**: the scanner reads card text on your phone with Google's on-device ML Kit.
   Camera frames and photos are never saved or uploaded. A small, low-resolution copy of the
   card's artwork is kept in memory only while a scan session is open, to choose between printings.
-* **Settings**, including a PriceCharting API key if you add one.
+* **Your settings.**
 
 The app doesn't ask for your name, email, location, contacts or other personal information.
 
@@ -25,7 +25,6 @@ To identify cards and show prices, the app requests card data from these service
 | TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) | The card number, set code or name being looked up, and search text you type |
 | tcgcsv.com (TCGplayer catalog) and optcgapi.com | Requests for set lists and card prices, and One Piece search text |
 | Card image hosts of the services above, and onepiece-cardgame.com | Requests for card images |
-| PriceCharting (only if you add your own API key) | Your key and the card name and number, to look up graded values |
 
 Like any internet request, these services can see your device's IP address and the app's name and
 version. They don't receive your collection, and the app sends no identifier that links your
@@ -37,8 +36,7 @@ version) and performance metrics to Google for diagnostics and usage analytics. 
 encrypted in transit and isn't shared with third parties. Card images and the text read from them are
 processed on your phone and aren't sent to Google.
 
-**Links you open.** Links to TCGplayer, eBay, PriceCharting, Yuyu-tei or a grading company's cert
-lookup open in your browser, under that site's own privacy policy.
+**Links you open.** Links to TCGplayer, eBay or Yuyu-tei open in your browser, under that site's own privacy policy.
 
 ## Backups
 
@@ -60,7 +58,9 @@ from anyone.
 ## Deleting your data
 
 Uninstalling the app, or clearing its storage in Android settings, deletes everything it stored.
-**Settings → Clear offline card data** removes downloaded card data and keeps your collection.
+**Settings → Delete collection** deletes your collection, rip history and value history (and, if
+you choose, your wantlist and price alerts). **Settings → Clear offline card data** removes downloaded
+card data and keeps your collection.
 
 ## Changes
 

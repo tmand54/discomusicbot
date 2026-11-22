@@ -27,15 +27,15 @@ if (buildingBundle && gradle.startParameter.taskNames.any { it.contains("Release
 }
 
 android {
-    namespace = "app.snapstack"
+    namespace = "app.tcgportfolio"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.snapstack"
+        applicationId = "app.tcgportfolio"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.8.0"
+        versionCode = 10
+        versionName = "1.9.0"
     }
 
     // ML Kit's on-device OCR is native code (~11 MB per ABI). Build a small APK per ABI plus a
