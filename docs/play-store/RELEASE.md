@@ -85,12 +85,14 @@ Actions), and every push produces a `tcg-portfolio-aab` artifact on the workflow
 
 ## 5. Put the privacy policy online
 
-Play needs a public URL. Any of these work:
+Play needs a public URL. The repository is private, so host the page somewhere public:
 
-* **GitHub Pages** (public repo, or a private one on a paid GitHub plan): repository Settings →
-  Pages → Deploy from a branch, folder `/docs`. The policy is then at
-  `https://<user>.github.io/<repo>/privacy-policy.html`.
-* **Google Sites**, **Netlify Drop** or any web host: upload `docs/privacy-policy.html` as it is.
+* **Netlify Drop** (free, no account needed to start): drag a folder containing
+  `docs/privacy-policy.html` onto [app.netlify.com/drop](https://app.netlify.com/drop), then claim the
+  site so it stays up. The policy is at `https://<site-name>.netlify.app/privacy-policy.html`.
+* **Google Sites** (free): create a site, paste the policy text into a page, publish it.
+* **GitHub Pages** works for a private repository only on a paid GitHub plan: repository Settings →
+  Pages → Deploy from a branch, folder `/docs`.
 
 ## 6. Create the app in Play Console
 
