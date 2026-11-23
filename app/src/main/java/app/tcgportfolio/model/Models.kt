@@ -13,6 +13,12 @@ enum class Game(val id: String, val label: String, val short: String) {
 
     companion object {
         fun fromId(id: String?): Game? = entries.firstOrNull { it.id == id }
+
+        /**
+         * The games the app offers. Yu-Gi-Oh! stays in the data model so older collections still load,
+         * but it isn't scanned, searched or listed (its image host doesn't allow apps to load images directly).
+         */
+        val offered: List<Game> get() = entries.filter { it != YUGIOH }
     }
 }
 

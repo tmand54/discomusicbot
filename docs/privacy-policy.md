@@ -22,7 +22,7 @@ To identify cards and show prices, the app requests card data from these service
 
 | Service | What is sent |
 | --- | --- |
-| TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) | The card number, set code or name being looked up, and search text you type |
+| TCGdex (Pokémon), Scryfall (Magic), Lorcast (Lorcana) | The card number, set code or name being looked up, and search text you type |
 | tcgcsv.com (TCGplayer catalog) and optcgapi.com | Requests for set lists and card prices, and One Piece search text |
 | Card image hosts of the services above, and onepiece-cardgame.com | Requests for card images |
 

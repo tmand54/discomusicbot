@@ -67,7 +67,7 @@ Expected result: Everyone / PEGI 3 / USK 0.
 * Processed ephemerally: **Yes** (used to answer the search; the app keeps no server-side log).
 * Required or optional: **Optional** (only when the user searches).
 * Purpose: **App functionality**.
-* Why: search text is sent to the card databases (Scryfall, YGOPRODeck, Lorcast, TCGdex,
+* Why: search text is sent to the card databases (Scryfall, Lorcast, TCGdex,
   optcgapi.com) to find cards.
 
 Declare nothing else:

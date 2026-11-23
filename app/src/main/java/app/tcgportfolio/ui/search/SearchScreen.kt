@@ -89,7 +89,7 @@ import kotlinx.coroutines.sync.withPermit
 
 class SearchViewModel : ViewModel() {
     private val graph = AppGraph.instance
-    val game = MutableStateFlow(Game.fromId(graph.settings.scanGame.value) ?: Game.POKEMON)
+    val game = MutableStateFlow(Game.fromId(graph.settings.scanGame.value)?.takeIf { it in Game.offered } ?: Game.POKEMON)
     val results = MutableStateFlow<List<Card>?>(null)
     val loading = MutableStateFlow(false)
     val error = MutableStateFlow<String?>(null)
@@ -166,7 +166,7 @@ fun SearchScreen(onOpenCard: (String) -> Unit) {
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Game.entries.forEach { g ->
+            Game.offered.forEach { g ->
                 FilterChip(selected = game == g, onClick = { vm.selectGame(g); if (query.isNotBlank()) vm.search(query) }, label = { Text(g.label) })
             }
         }

@@ -84,7 +84,7 @@ private fun ImportSheet(initialGame: Game?, onDismiss: () -> Unit, onPickFile: (
             Text("Game for lines that don't say", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = game == null, onClick = { game = null }, label = { Text("Auto") })
-                Game.entries.forEach { g -> FilterChip(selected = game == g, onClick = { game = g }, label = { Text(g.label) }) }
+                Game.offered.forEach { g -> FilterChip(selected = game == g, onClick = { game = g }, label = { Text(g.label) }) }
             }
             OutlinedTextField(
                 value = text, onValueChange = { text = it }, minLines = 5, maxLines = 10,

@@ -126,7 +126,7 @@ class ImportParsingTest {
         assertEquals(ImportParsing.NO_GAME, p.rows[0].gameLabel)
         assertEquals(2, p.rows[1].qty); assertEquals(Game.POKEMON, p.rows[1].game)
         assertEquals(Game.ONE_PIECE, p.rows[2].game)
-        assertEquals(3, p.rows[3].qty); assertEquals(Game.YUGIOH, p.rows[3].game)
+        assertEquals(3, p.rows[3].qty); assertTrue(p.rows[3].game != Game.YUGIOH) // Yu-Gi-Oh! isn't offered
         assertTrue(p.rows[4].key is app.tcgportfolio.scan.OnePieceDonKey)
         val magic = ImportParsing.parseList("4 Lightning Bolt", Game.MAGIC).rows.single()
         assertEquals(Game.MAGIC, magic.game); assertEquals(4, magic.qty)

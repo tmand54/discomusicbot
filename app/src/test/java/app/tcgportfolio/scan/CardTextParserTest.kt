@@ -67,14 +67,12 @@ class CardTextParserTest {
         assertEquals(MagicKey("m10", "141").id, key!!.id)
     }
 
-    @Test fun yugiohSetCodeBeatsPasscode() {
+    @Test fun yugiohIsNotOffered() {
+        // Yu-Gi-Oh! was removed from the app: its codes must not turn into Yu-Gi-Oh! lookups.
         val key = best(frame("Blue-Eyes White Dragon", "[DRAGON / NORMAL]", "LOB-EN001", "ATK/3000 DEF/2500", "89631139"))
-        assertEquals(YugiohKey("LOB-EN001").id, key!!.id)
-    }
-
-    @Test fun yugiohZeroReadAsLetterO() {
-        val key = best(frame("Dark Magician", "MP24-ENO12", "ATK/2500 DEF/2100"))
-        assertEquals(YugiohKey("MP24-EN012").id, key!!.id)
+        assertTrue(key !is YugiohKey && key !is YugiohPasscodeKey)
+        assertTrue(CardTextParser.parseTyped("lob-en001", null) !is YugiohKey)
+        assertTrue(CardTextParser.parseTyped("LOB-EN001", Game.YUGIOH) !is YugiohKey)
     }
 
     @Test fun lorcanaCollectorLine() {
@@ -205,7 +203,7 @@ class CardTextParserTest {
         val cells = CardTextParser.parseGrid(OcrFrame(lines, 800, 1000), rows = 2, cols = 2)
         assertEquals(4, cells.size)
         assertEquals(PokemonKey("4", "102").id, cells[0]!!.key.id)
-        assertEquals(YugiohKey("LOB-EN001").id, cells[1]!!.key.id)
+        assertTrue(cells[1]?.key !is YugiohKey) // Yu-Gi-Oh! isn't offered
         assertEquals(LorcanaKey("5", "12").id, cells[2]!!.key.id)
         assertNull(cells[3])
     }
@@ -214,7 +212,6 @@ class CardTextParserTest {
         assertEquals(PokemonKey("123", "193").id, CardTextParser.parseTyped("123/193", null)!!.id)
         assertEquals(MagicKey("mkm", "123").id, CardTextParser.parseTyped("MKM 123", null)!!.id)
         assertEquals(MagicKey("mkm", "7").id, CardTextParser.parseTyped("mkm/007", Game.MAGIC)!!.id)
-        assertEquals(YugiohKey("LOB-EN001").id, CardTextParser.parseTyped("lob-en001", null)!!.id)
         assertEquals(LorcanaKey("5", "12").id, CardTextParser.parseTyped("12/204 EN 5", null)!!.id)
         assertEquals(LorcanaKey("5", "12").id, CardTextParser.parseTyped("5 12", Game.LORCANA)!!.id)
         val pal = CardTextParser.parseTyped("PAL 123", Game.POKEMON) as PokemonKey

@@ -235,7 +235,7 @@ private fun GameChips(selected: Game?, onSelect: (Game?) -> Unit) {
     )
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text("Auto") }, colors = colors, border = null)
-        Game.entries.forEach { g ->
+        Game.offered.forEach { g ->
             FilterChip(selected = selected == g, onClick = { onSelect(g) }, label = { Text(g.label) }, colors = colors, border = null)
         }
     }

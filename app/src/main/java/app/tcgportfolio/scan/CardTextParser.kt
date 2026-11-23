@@ -114,7 +114,7 @@ object CardTextParser {
     fun parseLines(lines: List<OcrLine>, game: Game? = null): List<Detection> {
         if (lines.isEmpty()) return emptyList()
         val ctx = gameContext(lines)
-        fun allowed(g: Game) = game == null || game == g
+        fun allowed(g: Game) = (game == null || game == g) && g in Game.offered
         fun ctxOf(g: Game) = ctx[g] ?: 0.0
 
         val out = ArrayList<Detection>()
@@ -349,7 +349,7 @@ object CardTextParser {
                 }
             }
         }
-        if (game == null || game == Game.YUGIOH) {
+        if (Game.YUGIOH in Game.offered && (game == null || game == Game.YUGIOH)) {
             ygoCode.find(upper)?.let { m ->
                 if (m.groupValues[2].isNotEmpty() || game == Game.YUGIOH) {
                     return YugiohKey("${m.groupValues[1]}-${m.groupValues[2]}${digitsLoose(m.groupValues[3])}")

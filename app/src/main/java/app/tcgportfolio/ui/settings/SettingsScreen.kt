@@ -89,7 +89,7 @@ class SettingsViewModel : ViewModel() {
     init { loadCounts() }
 
     fun loadCounts() = viewModelScope.launch {
-        cachedCounts.value = withContext(Dispatchers.IO) { Game.entries.associateWith { graph.db.cachedCardCount(it) } }
+        cachedCounts.value = withContext(Dispatchers.IO) { Game.offered.associateWith { graph.db.cachedCardCount(it) } }
     }
 
     fun loadSets(game: Game) {
@@ -217,7 +217,7 @@ fun SettingsScreen() {
         ListItem(
             modifier = Modifier.clickable { offline = true; vm.loadSets(Game.POKEMON) },
             headlineContent = { Text("Download sets for offline scanning") },
-            supportingContent = { Text(Game.entries.joinToString(" · ") { "${it.short} ${counts[it] ?: 0}" } + " cards on device") },
+            supportingContent = { Text(Game.offered.joinToString(" · ") { "${it.short} ${counts[it] ?: 0}" } + " cards on device") },
             trailingContent = { Icon(Icons.Outlined.CloudDownload, null) },
             colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
         )
@@ -262,9 +262,9 @@ fun SettingsScreen() {
         Text(
             "TCG Investment Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no ads, no analytics. " +
                 "Card text is read on your phone with Google's ML Kit; only the card number or name is sent to look a card up.\n\n" +
-                "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
+                "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), Lorcast (Lorcana) and " +
                 "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound, Dragon Ball). Backups when a source is down or has no price: " +
-                "the TCGplayer catalog (Pokémon, Magic, Yu-Gi-Oh!, Lorcana) and optcgapi.com (One Piece search and prices). " +
+                "the TCGplayer catalog (Pokémon, Magic, Lorcana) and optcgapi.com (One Piece search and prices). " +
                 "Prices are TCGplayer market prices in USD where available. TCG Investment Portfolio is not affiliated with, endorsed or " +
                 "sponsored by any card game publisher, TCGplayer, or the data providers. All card names and images are " +
                 "property of their respective owners.",
@@ -330,7 +330,7 @@ private fun PrivacyDialog(onDismiss: () -> Unit) {
             "only in the app's private storage. Camera frames are read on your phone and never saved or uploaded. The app has " +
             "no accounts, ads or analytics of its own and doesn't ask for your name, email, location or contacts.",
         "What is sent, and why" to "To identify cards and show prices, the app sends the card number, set code, name or search text " +
-            "to TCGdex, Scryfall, YGOPRODeck, Lorcast, tcgcsv.com and optcgapi.com, and loads card images from their image hosts " +
+            "to TCGdex, Scryfall, Lorcast, tcgcsv.com and optcgapi.com, and loads card images from their image hosts " +
             "and onepiece-cardgame.com. " +
             "These services can see your IP address and the app's name and version, but never your collection.",
         "Google ML Kit" to "ML Kit, the on-device text reader, sends device information (manufacturer, model, OS version), " +
@@ -403,7 +403,7 @@ private fun OfflineSheet(vm: SettingsViewModel, onDismiss: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Game.entries.forEach { g -> FilterChip(selected = game == g, onClick = { vm.loadSets(g) }, label = { Text(g.label) }) }
+                Game.offered.forEach { g -> FilterChip(selected = game == g, onClick = { vm.loadSets(g) }, label = { Text(g.label) }) }
             }
             OutlinedTextField(
                 value = filter, onValueChange = { filter = it }, singleLine = true, placeholder = { Text("Filter sets") },

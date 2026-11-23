@@ -117,7 +117,7 @@ fun GameFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FilterChip(selected = selected == null, onClick = { onSelect(null) }, label = { Text(allLabel) })
-        Game.entries.forEach { g ->
+        Game.offered.forEach { g ->
             FilterChip(selected = selected == g, onClick = { onSelect(g) }, label = { Text(g.label) })
         }
     }

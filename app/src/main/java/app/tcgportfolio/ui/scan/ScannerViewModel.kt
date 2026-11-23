@@ -76,7 +76,7 @@ class ScannerViewModel(app: Application) : AndroidViewModel(app) {
     private val _ui = MutableStateFlow(
         ScanUi(
             mode = settings.mode(),
-            game = Game.fromId(settings.scanGame.value),
+            game = Game.fromId(settings.scanGame.value)?.takeIf { it in Game.offered },
             speed = settings.speed(),
         ).withGrid(settings.binderGrid.value)
     )

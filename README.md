@@ -2,7 +2,7 @@
 
 TCG Investment Portfolio is an Android app for trading-card collectors. You scan cards with the camera, it
 prices them, and it keeps track of your collection's value and profit/loss. It covers **Pokémon,
-Magic: The Gathering, Yu-Gi-Oh!, Disney Lorcana, One Piece, Riftbound and Dragon Ball**
+Magic: The Gathering, Disney Lorcana, One Piece, Riftbound and Dragon Ball**
 (Fusion World and the Super Card Game). There is no account, no ads and no
 server: your collection lives on your phone.
 
@@ -97,7 +97,7 @@ found ("Found in 12 ms · on device").
   **Select all**), then **Delete** to remove them all at once, with Undo.
 * **Search by any words, in any order:** name, set code / abbreviation / name, number, rarity
   (or its initials) and printing. For example `robin eb03 sp`, `luffy op05 alt`, `charizard obf sir`,
-  `pikachu 25`, `lightning bolt mkm foil`, `dark magician lob`. A set named in the search is
+  `pikachu 25`, `lightning bolt mkm foil`. A set named in the search is
   downloaded first, so `eb03 sp` lists every SP card in EB03. Pokémon set abbreviations come from
   TCGplayer's set list, and Pokémon rarities are sent to TCGdex as a filter. The Collection tab's
   search box takes the same words.
@@ -165,7 +165,6 @@ All of these are free public APIs and need no key:
 | --- | --- | --- |
 | Pokémon (EN) | [TCGdex](https://tcgdex.dev) | TCGplayer market, per printing |
 | Magic | [Scryfall](https://scryfall.com/docs/api) | USD / foil / etched |
-| Yu-Gi-Oh! | [YGOPRODeck](https://ygoprodeck.com/api-guide/) | per set printing & rarity |
 | Lorcana | [Lorcast](https://lorcast.com/docs/api) | USD / foil |
 | One Piece | [tcgcsv.com](https://tcgcsv.com) (daily TCGplayer catalog) | TCGplayer market, Normal / Foil |
 | Riftbound | [tcgcsv.com](https://tcgcsv.com) (daily TCGplayer catalog) | TCGplayer market, Normal / Foil |
@@ -178,7 +177,7 @@ set automatically, and the Search tab has a one-tap **Download all sets** button
 
 | When… | TCG Investment Portfolio falls back to |
 | --- | --- |
-| A Pokémon, Magic, Yu-Gi-Oh! or Lorcana card has no price, or its source is unreachable | TCGplayer's catalog (tcgcsv.com), matched by set, number and name |
+| A Pokémon, Magic or Lorcana card has no price, or its source is unreachable | TCGplayer's catalog (tcgcsv.com), matched by set, number and name |
 | TCGdex is down, or doesn't have a brand-new Pokémon set yet | TCGplayer's catalog, using the set code printed on the card (`PAL`, `DLR`…) |
 | TCGdex doesn't list a new Black Star promo yet (e.g. Kyogre `MEP 117`) | TCGplayer's promo set for that era, when scanning, typing the code, or searching by name |
 | Searching One Piece by name | [optcgapi.com](https://optcgapi.com), so you don't need every set downloaded |
