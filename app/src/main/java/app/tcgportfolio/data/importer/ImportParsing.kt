@@ -36,7 +36,7 @@ data class ImportRow(
 
 enum class ImportFormat(val label: String) {
     LIST("Pasted list"),
-    SNAPSTACK("TCG Portfolio backup"),
+    SNAPSTACK("TCG Investment Portfolio backup"),
     RIPFOLIO("Ripfolio backup"),
     CSV("CSV file"),
     UNKNOWN("Unknown file"),
@@ -83,7 +83,7 @@ object ImportParsing {
         ImportFormat.LIST -> parseList(text, null)
         ImportFormat.SNAPSTACK -> ParsedImport(ImportFormat.SNAPSTACK, emptyList())
         ImportFormat.UNKNOWN -> throw ImportException(
-            "TCG Portfolio couldn't recognise that file. It can read its own backups, Ripfolio backups " +
+            "TCG Investment Portfolio couldn't recognise that file. It can read its own backups, Ripfolio backups " +
                 "(ripfolio-backup-….json from Ripfolio → Settings → Back up) and CSV exports with a card name column."
         )
     }

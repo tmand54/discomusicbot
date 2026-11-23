@@ -5,7 +5,7 @@ Copy each block into the matching field. Character counts are under Play's limit
 ## App name (max 30)
 
 ```
-TCG Portfolio: Card Scanner
+TCG Investment Portfolio
 ```
 
 ## Short description (max 80)
@@ -19,7 +19,7 @@ Scan trading cards in a snap and track what your collection is worth.
 ```
 Scan a stack of cards in seconds and see what your collection is worth.
 
-TCG Portfolio reads the card number right on your phone, so cards are recognized as fast as you can slide them under the camera, even with a weak signal. Download a set once and scanning works fully offline.
+TCG Investment Portfolio reads the card number right on your phone, so cards are recognized as fast as you can slide them under the camera, even with a weak signal. Download a set once and scanning works fully offline.
 
 FAST SCANNING
 • Rapid mode: keep sliding cards under the camera and each one is added as it's recognized
@@ -47,7 +47,7 @@ Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, Disney Lorcana, One Piece Card Ga
 PRIVATE BY DESIGN
 No account, no ads and no tracking. Your collection stays on your phone. Card text is read on your phone; only the card number or name is sent to look the card up.
 
-TCG Portfolio is an independent app. It is not affiliated with, endorsed or sponsored by The Pokémon Company, Nintendo, Wizards of the Coast, Konami, Disney, Ravensburger, Bandai, Riot Games or TCGplayer. Card names and images belong to their respective owners.
+TCG Investment Portfolio is an independent app. It is not affiliated with, endorsed or sponsored by The Pokémon Company, Nintendo, Wizards of the Coast, Konami, Disney, Ravensburger, Bandai, Riot Games or TCGplayer. Card names and images belong to their respective owners.
 ```
 
 ## Category and details

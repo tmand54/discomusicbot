@@ -31,7 +31,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.tcgportfolio"
+        applicationId = "app.tcginvestportfolio"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

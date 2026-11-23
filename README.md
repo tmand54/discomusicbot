@@ -1,6 +1,6 @@
-# TCG Portfolio — fast TCG scanner & collection tracker (Android)
+# TCG Investment Portfolio — fast TCG scanner & collection tracker (Android)
 
-TCG Portfolio is an Android app for trading-card collectors. You scan cards with the camera, it
+TCG Investment Portfolio is an Android app for trading-card collectors. You scan cards with the camera, it
 prices them, and it keeps track of your collection's value and profit/loss. It covers **Pokémon,
 Magic: The Gathering, Yu-Gi-Oh!, Disney Lorcana, One Piece, Riftbound and Dragon Ball**
 (Fusion World and the Super Card Game). There is no account, no ads and no
@@ -12,16 +12,17 @@ Ready-built APKs are in [`dist/`](dist):
 
 | File | For |
 | --- | --- |
-| `TCG-Portfolio-1.0.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
-| `TCG-Portfolio-1.0.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
+| `TCG-Investment-Portfolio-1.0.0-arm64-v8a.apk` (≈16 MB) | Almost every Android phone from 2017 on |
+| `TCG-Investment-Portfolio-1.0.0-universal.apk` (≈34 MB) | Any device, including emulators and old 32-bit phones |
 
 Each version installs over the previous one as an update and keeps your collection.
 
 **Had a pre-release build installed?** Version numbering restarted at 1.0.0 for the Play Store
 release, and Android won't install a lower version over a higher one. In the old build use
 **Settings → Back up collection**, uninstall it, install 1.0.0, then **Settings → Restore a backup**.
-Builds from before the rename (package `app.snapstack`) install alongside instead; move your data the
-same way and uninstall the old one.
+Test builds with an earlier package name (`app.snapstack` or `app.tcgportfolio`) install alongside
+1.0.0 instead (the Play package is `app.tcginvestportfolio`); move your data the same way and
+uninstall the old one.
 
 Copy the APK to your phone and open it. Android asks you to allow installing from that source
 the first time. Requires Android 8.0 (API 26) or newer.
@@ -67,7 +68,7 @@ Scanning is built to keep cards moving, without a pause between them:
   and still works with no signal. You can also download sets ahead of time
   (**Settings → Offline card data**).
 * **Regular vs. parallel.** One Piece and Riftbound alt arts and parallels share the
-  regular card's number. TCG Portfolio picks the regular card and lists the special printings as
+  regular card's number. TCG Investment Portfolio picks the regular card and lists the special printings as
   one-tap alternatives. It flags the card only when one of those alternatives is worth much more.
 * **Choose a printing once.** When printings (Holo, Reverse Holo, Foil) are priced differently,
   the card is flagged but never blocks scanning. Pick a printing once and it applies to the rest
@@ -131,13 +132,13 @@ found ("Found in 12 ms · on device").
 
 * **Paste a list,** one card per line: `4 Lightning Bolt`, `2x 123/193`, `OP01-001`,
   `LOB-EN001 x3`, `DON!!`. Pick a game for lines that are only a name. Pasted CSV text works too.
-* **Choose a file:** a CSV, a plain-text list, a TCG Portfolio backup, or another collection app's
+* **Choose a file:** a CSV, a plain-text list, a TCG Investment Portfolio backup, or another collection app's
   backup. The format is detected automatically.
 
 ### Moving over from Ripfolio
 
 1. In Ripfolio, go to **Settings → Back up**. That saves a file named `ripfolio-backup-YYYY-MM-DD.json`.
-2. In TCG Portfolio, go to **Import from list or CSV → Choose a file** and pick that file.
+2. In TCG Investment Portfolio, go to **Import from list or CSV → Choose a file** and pick that file.
 3. Each card is matched by game, set, number and name against the same databases the scanner
    uses, then priced and added to your collection. Quantity, condition, foil, purchase price,
    grading (company, grade, slab value, cert #) and the date added are carried over.
@@ -149,11 +150,11 @@ can't come over:
 * **Sealed products.**
 * **Ripfolio's wantlist and custom lists.** The backup stores only Ripfolio's internal card IDs
   for these, not names.
-* **Games TCG Portfolio doesn't price yet,** such as Pokémon Japan and Dragon Ball.
+* **Games TCG Investment Portfolio doesn't price yet,** such as Pokémon Japan and Dragon Ball.
 
-CSV files also work: Ripfolio's CSV export, TCG Portfolio's own, or any CSV with a card-name column.
+CSV files also work: Ripfolio's CSV export, TCG Investment Portfolio's own, or any CSV with a card-name column.
 Optional columns are set, number, game, quantity, condition, printing, purchase price and
-grading. Restoring a TCG Portfolio backup through the same button replaces your collection, and
+grading. Restoring a TCG Investment Portfolio backup through the same button replaces your collection, and
 asks you to confirm first.
 
 ## Data sources
@@ -175,7 +176,7 @@ set automatically, and the Search tab has a one-tap **Download all sets** button
 
 **Backup sources** keep things working when a source is down or missing data:
 
-| When… | TCG Portfolio falls back to |
+| When… | TCG Investment Portfolio falls back to |
 | --- | --- |
 | A Pokémon, Magic, Yu-Gi-Oh! or Lorcana card has no price, or its source is unreachable | TCGplayer's catalog (tcgcsv.com), matched by set, number and name |
 | TCGdex is down, or doesn't have a brand-new Pokémon set yet | TCGplayer's catalog, using the set code printed on the card (`PAL`, `DLR`…) |
@@ -199,7 +200,7 @@ catalog only.
   once that set is downloaded. Use Search → Download all sets for Dragon Ball to cover them all.
 * **The old Panini Dragon Ball Z game** isn't included.
 
-TCG Portfolio is not affiliated with any card game publisher, TCGplayer, or the data providers.
+TCG Investment Portfolio is not affiliated with any card game publisher, TCGplayer, or the data providers.
 
 ## Build from source
 
@@ -245,7 +246,7 @@ Everything for the Play Store is in [`docs/play-store/`](docs/play-store/):
 app/src/main/java/app/tcgportfolio/
   scan/        CardTextParser (OCR text → card numbers), FrameVoter, TextAnalyzer (CameraX + ML Kit), ScanSession
   data/        CardRepository (memory → device → network + set prefetch), CollectionRepository, Settings
-  data/importer/ Ripfolio / CSV / TCG Portfolio backup import (parsing + card matching)
+  data/importer/ Ripfolio / CSV / TCG Investment Portfolio backup import (parsing + card matching)
   data/source/ TCGdex, Scryfall, YGOPRODeck, Lorcast and tcgcsv (One Piece, Riftbound) clients
   data/db/     SQLite storage with change-notifying flows
   ui/          Jetpack Compose screens: portfolio, scan, collection, card, search, settings

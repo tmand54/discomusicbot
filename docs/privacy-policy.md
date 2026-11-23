@@ -1,8 +1,8 @@
-# TCG Portfolio — Privacy Policy
+# TCG Investment Portfolio — Privacy Policy
 
 _Effective November 22, 2026_
 
-TCG Portfolio is a trading card scanner and collection tracker. It has no accounts, no ads and no
+TCG Investment Portfolio is a trading card scanner and collection tracker. It has no accounts, no ads and no
 analytics of its own. Your collection stays on your phone.
 
 ## What stays on your phone
@@ -52,7 +52,7 @@ CSV** are saved wherever you choose, and the app doesn't upload them.
 
 ## Children
 
-TCG Portfolio isn't directed at children under 13 and doesn't knowingly collect personal information
+TCG Investment Portfolio isn't directed at children under 13 and doesn't knowingly collect personal information
 from anyone.
 
 ## Deleting your data
@@ -69,5 +69,5 @@ date.
 
 ## Contact
 
-Questions about this policy can be sent to the developer email shown on TCG Portfolio's Google Play
+Questions about this policy can be sent to the developer email shown on TCG Investment Portfolio's Google Play
 page.

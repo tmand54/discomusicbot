@@ -150,7 +150,7 @@ private fun ProgressDialog(text: String, progress: Float?) {
                 else CircularProgressIndicator()
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Keep TCG Portfolio open — cards are matched against the card databases and priced.",
+                    "Keep TCG Investment Portfolio open — cards are matched against the card databases and priced.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -1,6 +1,6 @@
-# Selling TCG Portfolio on Google Play for $1
+# Selling TCG Investment Portfolio on Google Play for $1
 
-Version **1.0.0** (versionCode 1), package `app.tcgportfolio`. The app meets Play's technical rules:
+Version **1.0.0** (versionCode 1), package `app.tcginvestportfolio`. The app meets Play's technical rules:
 it targets Android 16 (API 36), its 64-bit native libraries support 16 KB memory pages, it's
 shrunk with R8, and it builds a signed Android App Bundle (`.aab`). Everything below is what only
 you can do, in order. Expect roughly 3–4 weeks end to end for a new personal account, mostly the
@@ -74,7 +74,7 @@ The bundle is `app/build/outputs/bundle/release/app-release.aab`. Without a key,
 stops with an explanation instead of producing a debug-signed bundle that Play would reject.
 
 **Or let GitHub build it:** add these repository secrets (Settings → Secrets and variables →
-Actions), and every push produces a `tcg-portfolio-aab` artifact on the workflow run:
+Actions), and every push produces a `tcg-investment-portfolio-aab` artifact on the workflow run:
 
 | Secret | Value |
 | --- | --- |
@@ -97,7 +97,7 @@ Play needs a public URL. The repository is private, so host the page somewhere p
 ## 6. Create the app in Play Console
 
 1. **Home → Create app**.
-2. App name **TCG Portfolio**, default language **English (United States)**, **App**, **Paid**.
+2. App name **TCG Investment Portfolio**, default language **English (United States)**, **App**, **Paid**.
 3. Accept the declarations and create it.
 
 ## 7. Set the price to $1
@@ -143,7 +143,7 @@ the Play build on your own phone first.
    Google reviews the application (usually up to about a week).
 2. When approved: **Test and release → Production → Create new release**. Upload the `.aab` (or
    promote the closed-test release), add release notes, **Review and roll out**.
-3. The app review takes from a few hours to a few days. Then TCG Portfolio is on sale at $1.
+3. The app review takes from a few hours to a few days. Then TCG Investment Portfolio is on sale at $1.
 
 ## 11. Move your own phone to the Play version
 
@@ -152,7 +152,7 @@ one with the other:
 
 1. In the sideloaded app: **Settings → Back up collection**, and save the file somewhere you can reach.
 2. Uninstall the sideloaded app.
-3. Install TCG Portfolio from Play.
+3. Install TCG Investment Portfolio from Play.
 4. **Settings → Restore a backup** and choose the file.
 
 ## 12. Every later release

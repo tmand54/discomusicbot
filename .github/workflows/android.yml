@@ -50,7 +50,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: tcg-portfolio-apks
+          name: tcg-investment-portfolio-apks
           path: app/build/outputs/apk/release/*.apk
 
       # Google Play bundle, signed with your upload key (see docs/play-store/RELEASE.md).
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: env.KEYSTORE_BASE64 != ''
         with:
-          name: tcg-portfolio-aab
+          name: tcg-investment-portfolio-aab
           path: app/build/outputs/bundle/release/*.aab
 
       - name: Publish release (tags only)

@@ -165,7 +165,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("TCG Portfolio", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("TCG Investment Portfolio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2)
                     Text(
                         refreshing?.let { (d, t) -> if (t > 0) "Updating prices… $d/$t" else "Updating prices…" }
                             ?: if (lastRefresh > 0) "Prices updated ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(lastRefresh))}"
@@ -185,7 +185,7 @@ fun PortfolioScreen(onOpenCard: (String) -> Unit, onScan: () -> Unit) {
             item {
                 EmptyState(
                     Icons.Outlined.Inventory2, "Your portfolio starts with one scan",
-                    "Point the camera at a card — TCG Portfolio reads the collector number on-device and prices it in a blink. " +
+                    "Point the camera at a card — TCG Investment Portfolio reads the collector number on-device and prices it in a blink. " +
                         "Pokémon, Magic, Yu-Gi-Oh!, Lorcana, One Piece, Riftbound and Dragon Ball.",
                     Modifier.padding(top = 48.dp),
                 ) {

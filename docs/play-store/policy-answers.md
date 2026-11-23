@@ -1,6 +1,6 @@
 # Play Console policy answers (Policy → App content)
 
-These answers describe TCG Portfolio 1.8.0 as built from this repository. As the developer, you're
+These answers describe TCG Investment Portfolio 1.8.0 as built from this repository. As the developer, you're
 responsible for the final answers. Recheck them if you add analytics, crash reporting, ads or
 accounts.
 

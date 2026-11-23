@@ -260,12 +260,12 @@ fun SettingsScreen() {
         Group("About")
         Action("Privacy policy", "What stays on your phone and what is sent to look cards up") { privacy = true }
         Text(
-            "TCG Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no ads, no analytics. " +
+            "TCG Investment Portfolio ${BuildConfig.VERSION_NAME}. Your collection lives only on this phone — no account, no ads, no analytics. " +
                 "Card text is read on your phone with Google's ML Kit; only the card number or name is sent to look a card up.\n\n" +
                 "Card data and prices: TCGdex (Pokémon), Scryfall (Magic), YGOPRODeck (Yu-Gi-Oh!), Lorcast (Lorcana) and " +
                 "tcgcsv.com's daily TCGplayer catalog (One Piece, Riftbound, Dragon Ball). Backups when a source is down or has no price: " +
                 "the TCGplayer catalog (Pokémon, Magic, Yu-Gi-Oh!, Lorcana) and optcgapi.com (One Piece search and prices). " +
-                "Prices are TCGplayer market prices in USD where available. TCG Portfolio is not affiliated with, endorsed or " +
+                "Prices are TCGplayer market prices in USD where available. TCG Investment Portfolio is not affiliated with, endorsed or " +
                 "sponsored by any card game publisher, TCGplayer, or the data providers. All card names and images are " +
                 "property of their respective owners.",
             style = MaterialTheme.typography.bodySmall,
@@ -342,7 +342,7 @@ private fun PrivacyDialog(onDismiss: () -> Unit) {
         "Children" to "The app isn't directed at children under 13.",
         "Deleting your data" to "Settings → Delete collection removes your collection (and optionally your wantlist and alerts). " +
             "Uninstall the app or clear its storage in Android settings to delete everything it stored.",
-        "Contact" to "Use the developer email on TCG Portfolio's Google Play page.",
+        "Contact" to "Use the developer email on TCG Investment Portfolio's Google Play page.",
     )
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,

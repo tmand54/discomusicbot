@@ -242,7 +242,7 @@ fun CardDetailScreen(cardId: String, onBack: () -> Unit, onOpenCard: (String) ->
                     )
                 } else {
                     Text(
-                        "TCG Portfolio records this card's price each day it's in your collection, wantlist or alerts.",
+                        "TCG Investment Portfolio records this card's price each day it's in your collection, wantlist or alerts.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
