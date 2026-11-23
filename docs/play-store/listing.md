@@ -30,14 +30,16 @@ FAST SCANNING
 
 PRICES AND PORTFOLIO
 • Market prices for every printing, updated daily
-• Total value, profit and loss against what you paid, and value over time
+• Total value, ROI, and profit and loss against what you paid
+• Performance chart for 1 day, 5 days, 1 month, 6 months, 1 year or all time, with % change
 • Track pack openings: enter what you paid and see whether the rip came out ahead
 • Price alerts when a card rises above or falls below your target
 
 COLLECTION
 • Set progress with the cards you're missing, plus a wantlist
 • Condition, grading, purchase price, language and notes for every copy
-• Search every card, and download sets for offline use
+• Search by any words: name, set, number, rarity or printing (for example "robin eb03 sp")
+• Download sets for offline use
 • Import a pasted card list, a CSV, or a backup from another collection app
 • Back up to a file and export to CSV whenever you like
 
@@ -45,7 +47,7 @@ GAMES
 Pokémon TCG, Magic: The Gathering, Disney Lorcana, One Piece Card Game (English and Japanese, including DON!! cards), Riftbound and Dragon Ball Super Card Game (Fusion World and Masters).
 
 PRIVATE BY DESIGN
-No account, no ads and no tracking. Your collection stays on your phone. Card text is read on your phone; only the card number or name is sent to look the card up.
+No account and no ads. Your collection stays on your phone. Card text is read on your phone; only the card number or name is sent to look the card up.
 
 TCG Investment Portfolio is an independent app. It is not affiliated with, endorsed or sponsored by The Pokémon Company, Nintendo, Wizards of the Coast, Disney, Ravensburger, Bandai, Riot Games or TCGplayer. Card names and images belong to their respective owners.
 ```
